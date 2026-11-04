@@ -24,10 +24,78 @@ function articleLink(label, url) {
   });
   return el;
 }
-function filters() { return {q: $('query').value.trim(), hours: $('hours').value, sources: [...document.querySelectorAll('fieldset input:checked')].map(x => x.value).join(',')}; }
-function restoreFilters(value) { if (!value || typeof value !== 'object') return; $('query').value = value.q || ''; $('hours').value = value.hours || '0'; if (typeof value.sources === 'string') document.querySelectorAll('fieldset input').forEach(el => el.checked = value.sources.split(',').includes(el.value)); }
+function filters() { return {q: $('query').value.trim(), hours: $('hours').value, sources: [...document.querySelectorAll('#source-filters input:checked')].map(x => x.value).join(',')}; }
+function restoreFilters(value) { if (!value || typeof value !== 'object') return; $('query').value = value.q || ''; $('hours').value = value.hours || '0'; if (typeof value.sources === 'string') document.querySelectorAll('#source-filters input').forEach(el => el.checked = value.sources.split(',').includes(el.value)); }
 function dateLabel(timestamp) { if (!timestamp) return 'Date unavailable'; return new Date(timestamp * 1000).toLocaleString([], {month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function empty(title, message) { const box = make('div', undefined, 'empty'); box.append(make('span', '◎', 'empty-symbol'), make('h3', title), make('p', message)); return box; }
+
+function renderSourceFilters(sources, selected=null) {
+  const fieldset=$('source-filters');fieldset.replaceChildren(make('legend','Sources'));
+  for (const source of sources.filter(s=>s.enabled)) {
+    const label=make('label');const input=make('input');input.type='checkbox';input.value=source.id;
+    input.checked=selected===null||selected.has(source.id);label.append(input,document.createTextNode(source.name));fieldset.append(label);
+  }
+  if(!sources.some(s=>s.enabled))fieldset.append(make('p','Enable or add feeds in Settings.','muted'));
+}
+
+async function loadSources() {
+  const data=await get('/api/sources');state.sources=data.sources;
+  const saved=readStore('news-osint.filters',null);
+  const known=new Set(readStore('news-osint.known-sources',['google','bbc','guardian','aljazeera','npr','france24']));
+  const selected=saved&&typeof saved.sources==='string'?new Set(saved.sources.split(',')):null;
+  if(selected)for(const source of data.sources)if(!known.has(source.id)&&source.enabled)selected.add(source.id);
+  renderSourceFilters(data.sources,selected);
+  writeStore('news-osint.known-sources',data.sources.map(s=>s.id));
+}
+
+async function settingsRequest(path,data) {
+  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-News-OSINT':'settings'},body:JSON.stringify(data)});
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Settings request failed.');return result;
+}
+
+function renderSettingsSources() {
+  const list=$('settings-sources');list.replaceChildren();
+  if(!state.sourceDraft.length)list.append(make('p','No sources in the list. Add a feed below.','muted'));
+  for(const source of state.sourceDraft) {
+    const card=make('div',undefined,'source-editor');card.dataset.sourceId=source.id;
+    const nameLabel=make('label','Name');const name=make('input');name.value=source.name;name.maxLength=120;name.required=true;name.setAttribute('aria-label','Source name');name.addEventListener('input',()=>source.name=name.value);nameLabel.append(name);
+    const urlLabel=make('label','Feed URL');const url=make('input');url.type='url';url.value=source.url;url.maxLength=4000;url.required=true;url.setAttribute('aria-label','Feed URL');url.addEventListener('input',()=>source.url=url.value);urlLabel.append(url);
+    const controls=make('div',undefined,'source-editor-actions');const enabledLabel=make('label');const enabled=make('input');enabled.type='checkbox';enabled.checked=source.enabled;enabled.addEventListener('change',()=>source.enabled=enabled.checked);enabledLabel.append(enabled,document.createTextNode('Enabled'));
+    const status=make('span',undefined,'feed-test-status');status.setAttribute('role','status');
+    const check=button('Test feed',async()=>{
+      if(!url.reportValidity())return;check.disabled=true;status.textContent='Checking…';
+      try{const result=await settingsRequest('/api/sources/test',{id:source.id,url:source.url});status.textContent=`${result.count} ${result.count===1?'story':'stories'} found`;status.title=result.sample||'This feed is valid but currently empty.';}
+      catch(error){status.textContent=error.message;}
+      finally{check.disabled=false;}
+    });
+    const remove=button('Remove',()=>{state.sourceDraft=state.sourceDraft.filter(s=>s.id!==source.id);renderSettingsSources();});remove.setAttribute('aria-label','Remove '+source.name);
+    controls.append(enabledLabel,check,remove);card.append(nameLabel,urlLabel,controls,status);
+    if(source.id==='google')card.append(make('small','The default Google News URL also supports topic searches. A different URL is treated as a regular feed.','muted'));
+    list.append(card);
+  }
+}
+
+async function openSettings() {
+  $('settings-open').disabled=true;
+  try {
+    const data=await get('/api/sources');state.sourceDraft=data.sources.map(s=>({...s}));renderSettingsSources();
+    $('settings-status').textContent='';$('add-feed-form').reset();$('settings-dialog').showModal();
+  } catch(error){toast(error.message);}
+  finally{$('settings-open').disabled=false;}
+}
+
+async function saveSettings() {
+  for(const input of document.querySelectorAll('.source-editor input:not([type=checkbox])'))if(!input.reportValidity())return;
+  const previous=new Set((state.sources||[]).filter(s=>s.enabled).map(s=>s.id));
+  const selected=new Set(filters().sources.split(','));$('settings-save').disabled=true;$('settings-status').textContent='Saving…';
+  try {
+    const data=await settingsRequest('/api/sources',{sources:state.sourceDraft});state.sources=data.sources;
+    for(const source of data.sources)if(source.enabled&&!previous.has(source.id))selected.add(source.id);
+    renderSourceFilters(data.sources,selected);writeStore('news-osint.known-sources',data.sources.map(s=>s.id));
+    $('settings-dialog').close();toast('News sources saved.');loadNews();
+  } catch(error){$('settings-status').textContent=error.message;}
+  finally{$('settings-save').disabled=false;}
+}
 
 async function loadNews() {
   const request = ++state.request;
@@ -315,6 +383,15 @@ function resizeDivider(id, side) {
 }
 
 $('search-form').addEventListener('submit', event => { event.preventDefault(); loadNews(); if (innerWidth <= 760) document.body.classList.add('hide-left'); });
+$('settings-open').addEventListener('click',openSettings);
+for(const id of ['settings-close','settings-cancel'])$(id).addEventListener('click',()=>$('settings-dialog').close());
+$('settings-save').addEventListener('click',saveSettings);
+$('add-feed-form').addEventListener('submit',event=>{
+  event.preventDefault();const name=$('new-feed-name').value.trim(),url=$('new-feed-url').value.trim();
+  if(!name)return;
+  if(state.sourceDraft.some(source=>source.url===url)){$('settings-status').textContent='This feed URL is already in the list.';return;}
+  state.sourceDraft.push({id:'feed_'+crypto.randomUUID().replaceAll('-','').slice(0,16),name,url,enabled:true});renderSettingsSources();$('add-feed-form').reset();$('settings-status').textContent='Feed added to the list. Save changes to start using it.';
+});
 $('wiki-form').addEventListener('submit', event=>{event.preventDefault();searchWikipedia();});
 for (const name of ['news','wikipedia']) {
   $('tab-'+name).addEventListener('click',()=>switchSearchTab(name));
@@ -341,11 +418,8 @@ restoreFilters(readStore('news-osint.filters', {})); renderSaved(); applyLayout(
 $('wiki-query').value=readStore('news-osint.wiki-query','');
 switchSearchTab(readStore('news-osint.search-tab','news'));
 if(!$('wiki-controls').hidden && $('wiki-query').value)searchWikipedia();
-if (!readStore('news-osint.google-initialized', false)) {
-  document.querySelector('fieldset input[value="google"]').checked = true;
-  writeStore('news-osint.google-initialized', true);
-}
 resizeDivider('divider-left','left'); resizeDivider('divider-right','right');
 if (innerWidth <= 760) document.body.classList.add('hide-left','hide-right');
 $('refresh').value = String(readStore('news-osint.refresh', 0)); $('refresh').dispatchEvent(new Event('change'));
-loadTheme().then(initMap); setInterval(loadTheme, 3000); loadNews();
+loadTheme().then(initMap); setInterval(loadTheme, 3000);
+loadSources().then(loadNews).catch(error=>{$('stories').replaceChildren(empty('Could not load source settings.',error.message));$('stories').setAttribute('aria-busy','false');});

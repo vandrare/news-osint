@@ -29,6 +29,26 @@ to use an existing browser instead.
 - Wikipedia place search, latitude/longitude navigation, Wikipedia/Wikidata profiles, infobox facts, and expandable article sections beneath the map.
 - Manually linked story locations, map pins, and population dates where available.
 - Source health and timestamps, 5-minute feed caching, last-good results when feeds fail.
+- Settings for adding, testing, renaming, enabling, disabling, and removing RSS/Atom sources.
+
+## Feed settings
+
+Open **Settings** in the header to manage news sources. The six initial entries
+are Google News, BBC World, The Guardian, Al Jazeera, NPR World, and France 24.
+Enter a name and RSS or Atom URL, select **Add to list**, then **Save changes**.
+**Test feed** checks the URL and reports how many readable stories it provides.
+Newly added feeds are selected automatically in the sidebar and use the same
+news cards, search, date filters, source health, article reader, and CSV export.
+
+Existing entries can be renamed, edited, disabled, or removed. Disabled feeds
+are retained in settings but are not fetched or offered in the sidebar. **Cancel**
+discards the current edits. Changes are stored in
+`~/.local/state/news-osint/sources.json`, separately from the source repository;
+your custom feed addresses are not committed to Git. Settings apply to this
+computer. Saved searches retain their source selections for feeds that still exist.
+
+Google News's default feed URL retains its query-specific search behavior. If
+you replace that URL, it is read and filtered as an ordinary RSS/Atom feed.
 
 ## Coverage and limitations
 

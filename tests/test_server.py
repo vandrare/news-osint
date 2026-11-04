@@ -12,6 +12,15 @@ import server
 
 
 class NewsTests(unittest.TestCase):
+    def setUp(self):
+        self.state_dir=tempfile.TemporaryDirectory()
+        self.state_patch=patch.object(server,'STATE',Path(self.state_dir.name))
+        self.state_patch.start()
+
+    def tearDown(self):
+        self.state_patch.stop()
+        self.state_dir.cleanup()
+
     def test_query_phrases_alternatives_and_exclusions(self):
         match = server.compile_query('"power outage" -planned OR earthquake')
         self.assertTrue(match('A POWER OUTAGE in Lyon'))
@@ -99,7 +108,7 @@ class NewsTests(unittest.TestCase):
         self.assertNotEqual(keys[0], keys[1])
 
     def test_google_results_are_not_rejected_by_local_literal_matching(self):
-        story = dict(id='g1', title='Transit disruption', summary='', timestamp=time.time(), sourceId='google')
+        story = dict(id='g1', title='Transit disruption', summary='', timestamp=time.time(), sourceId='google', via='Google News')
         with patch.object(server, 'load_feed', return_value=([story], {'status':'ok'})):
             result = server.news({'sources':'google', 'q':'Lyon site:example.org'})
         self.assertEqual(result['items'], [story])
@@ -155,6 +164,52 @@ class NewsTests(unittest.TestCase):
         self.assertEqual(parser.text(),'Biography\n\nA & B.\n\nMore text.')
         with self.assertRaises(ValueError):
             server.wikipedia_section('123','../secret')
+
+    def test_source_settings_seed_existing_sources_and_persist_edits(self):
+        initial=server.sources()
+        self.assertEqual([s['id'] for s in initial],list(server.FEEDS))
+        self.assertTrue((server.STATE/'sources.json').exists())
+        initial[1]['name']='BBC custom label'
+        initial[2]['enabled']=False
+        initial.append(dict(id='feed_local',name='Local feed',url='https://example.org/rss.xml',enabled=True))
+        server.save_sources(initial)
+        self.assertEqual(server.sources(),initial)
+        self.assertEqual(len(server.sources()),7)
+
+    def test_invalid_source_settings_do_not_overwrite_saved_configuration(self):
+        original=server.sources()
+        for mutation in [dict(id='bbc',name='Duplicate ID',url='https://example.org/rss',enabled=True),
+                         dict(id='new',name='Invalid URL',url='file:///etc/passwd',enabled=True),
+                         dict(id='new',name='',url='https://example.org/rss',enabled=True),
+                         dict(id='new',name='Duplicate URL',url=original[0]['url'],enabled=True)]:
+            with self.subTest(mutation=mutation),self.assertRaises(ValueError):
+                server.save_sources(original+[mutation])
+            self.assertEqual(server.sources(),original)
+
+    def test_atom_feed_uses_custom_name_and_iso_dates(self):
+        data=b'''<feed xmlns="http://www.w3.org/2005/Atom"><title>Example</title><entry>
+        <title>Custom topic</title><link rel="alternate" href="/story"/>
+        <updated>2026-11-04T12:00:00Z</updated><summary type="html">&lt;p&gt;A summary&lt;/p&gt;</summary>
+        </entry></feed>'''
+        source=dict(id='custom',name='My source',url='https://example.org/feed',enabled=True)
+        story=server.parse_feed(data,'custom',source)['items'][0]
+        self.assertEqual(story['source'],'My source')
+        self.assertEqual(story['url'],'https://example.org/story')
+        self.assertEqual(story['summary'],'A summary')
+        self.assertIsNotNone(story['timestamp'])
+        with self.assertRaises(ValueError):
+            server.parse_feed(b'<html><body>Not a feed</body></html>','custom',source)
+
+    def test_custom_feeds_share_news_filters_and_disabled_feeds_are_not_fetched(self):
+        server.save_sources([dict(id='custom',name='My RSS',url='https://example.org/rss',enabled=True),
+                             dict(id='disabled',name='Disabled',url='https://example.org/disabled',enabled=False)])
+        xml=b'<rss><channel><item><title>City story</title><link>https://example.org/story</link><description>More context</description></item></channel></rss>'
+        with patch.object(server,'fetch',return_value=xml) as fetch:
+            result=server.news({'q':'City','sources':'custom,disabled'})
+            self.assertEqual(fetch.call_count,1)
+        self.assertEqual(len(result['items']),1)
+        self.assertEqual(result['items'][0]['source'],'My RSS')
+        self.assertEqual(result['sources'][0]['id'],'custom')
 
 
 if __name__ == '__main__':

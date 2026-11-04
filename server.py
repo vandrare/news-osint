@@ -2,6 +2,7 @@
 """News-OSINT: loopback-only, standard-library backend. No subscriptions."""
 import argparse
 import concurrent.futures
+import datetime
 import email.utils
 import hashlib
 import html
@@ -38,6 +39,68 @@ LOCKS = {}
 LOCK = threading.Lock()
 
 
+def feed_url(value):
+    if not isinstance(value, str) or len(value) > 4000 or any(ord(c) < 32 for c in value):
+        raise ValueError('Enter a valid RSS feed URL')
+    value = value.strip()
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme not in ('https', 'http') or not parsed.hostname or parsed.username or parsed.password:
+        raise ValueError('Feed URLs must use HTTP or HTTPS without embedded passwords')
+    return value
+
+
+def default_sources():
+    return [dict(id=key, name=name, url=url, enabled=True) for key, (name, url) in FEEDS.items()]
+
+
+def validate_sources(values):
+    if not isinstance(values, list) or len(values) > 100:
+        raise ValueError('Settings support up to 100 feeds')
+    result, ids, urls = [], set(), set()
+    for source in values:
+        if not isinstance(source, dict):
+            raise ValueError('Invalid feed entry')
+        key, name = source.get('id'), source.get('name')
+        if not isinstance(key, str) or not re.fullmatch(r'[a-z0-9_-]{1,64}', key) or key in ids:
+            raise ValueError('Each feed needs a unique identifier')
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 120:
+            raise ValueError('Each feed needs a name of 1–120 characters')
+        url = feed_url(source.get('url'))
+        if url in urls:
+            raise ValueError('This feed URL is already in the list')
+        if not isinstance(source.get('enabled', True), bool):
+            raise ValueError('Feed enabled status must be true or false')
+        result.append(dict(id=key, name=name.strip(), url=url, enabled=source.get('enabled', True)))
+        ids.add(key)
+        urls.add(url)
+    return result
+
+
+def write_sources(sources):
+    STATE.mkdir(parents=True, exist_ok=True)
+    path = STATE / 'sources.json'
+    temp = path.with_suffix('.tmp')
+    temp.write_text(json.dumps(sources, indent=2) + '\n')
+    temp.replace(path)
+
+
+def sources():
+    with get_lock('sources-settings'):
+        path = STATE / 'sources.json'
+        if not path.exists():
+            values = default_sources()
+            write_sources(values)
+            return values
+        return validate_sources(json.loads(path.read_text()))
+
+
+def save_sources(values):
+    values = validate_sources(values)
+    with get_lock('sources-settings'):
+        write_sources(values)
+    return {'sources': values}
+
+
 def get_lock(key):
     with LOCK:
         return LOCKS.setdefault(key, threading.Lock())
@@ -68,7 +131,11 @@ def cached(key, ttl, fn, stale=False):
 
 def fetch(url):
     req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'application/json, application/xml;q=0.9,*/*;q=0.8'})
-    with urllib.request.urlopen(req, timeout=18) as response:
+    class WebRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, request, fp, code, message, headers, newurl):
+            feed_url(newurl)
+            return super().redirect_request(request, fp, code, message, headers, newurl)
+    with urllib.request.build_opener(WebRedirect).open(req, timeout=18) as response:
         data = response.read(8_000_001)
         if len(data) > 8_000_000:
             raise ValueError('Response too large')
@@ -87,32 +154,51 @@ def plain(value):
     return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]*>', ' ', value or ''))).strip()
 
 
-def parse_feed(data, key):
+def parse_feed(data, key, source=None):
     root = ET.fromstring(data)
-    name = FEEDS[key][0]
+    source = source or dict(id=key, name=FEEDS[key][0], url=FEEDS[key][1])
+    name = source['name']
+    google = key == 'google' and source['url'] == FEEDS['google'][1]
+    local = lambda tag: tag.rsplit('}', 1)[-1]
+    atom = local(root.tag) == 'feed'
+    if local(root.tag) not in ('rss', 'RDF', 'feed'):
+        raise ValueError('This URL does not return an RSS or Atom feed')
+    if local(root.tag) == 'rss' and not any(local(child.tag) == 'channel' for child in root):
+        raise ValueError('This RSS feed is missing its channel')
+    def text(item, tag):
+        child = next((c for c in item if local(c.tag) == tag), None)
+        return ''.join(child.itertext()) if child is not None else ''
     items = []
-    for item in root.findall('.//item'):
-        url = item.findtext('link', '').strip()
+    for item in (element for element in root.iter() if local(element.tag) == ('entry' if atom else 'item')):
+        if atom:
+            url = next((c.get('href', '') for c in item if local(c.tag) == 'link' and c.get('rel', 'alternate') == 'alternate'), '')
+        else:
+            url = text(item, 'link').strip()
+        if not url:
+            continue
+        url = urllib.parse.urljoin(source['url'], url)
         if urllib.parse.urlsplit(url).scheme not in ('http', 'https'):
             continue
-        title = plain(item.findtext('title'))
+        title = plain(text(item, 'title'))
         if not title:
             continue
-        published = item.findtext('pubDate', '')
+        published = (text(item, 'published') or text(item, 'updated')) if atom else (text(item, 'pubDate') or text(item, 'date'))
         try:
             timestamp = email.utils.parsedate_to_datetime(published).timestamp()
         except (ValueError, TypeError, OverflowError):
-            timestamp = None
-        publisher = plain(item.findtext('source')) if key == 'google' else name
+            try:
+                date = datetime.datetime.fromisoformat(published.replace('Z', '+00:00'))
+                timestamp = date.replace(tzinfo=datetime.timezone.utc).timestamp() if date.tzinfo is None else date.timestamp()
+            except (ValueError, TypeError, OverflowError):
+                timestamp = None
+        publisher = plain(text(item, 'source')) if google else name
         publisher = publisher or name
-        if key == 'google' and title.endswith(' - ' + publisher):
+        if google and title.endswith(' - ' + publisher):
             title = title[:-len(' - ' + publisher)]
         items.append(dict(id=hashlib.sha256(url.encode()).hexdigest()[:16], title=title,
-                          url=url, summary='' if key == 'google' else plain(item.findtext('description'))[:1400],
-                          source=publisher, via='Google News' if key == 'google' else None,
+                          url=url, summary='' if google else plain(text(item, 'summary') or text(item, 'description') or text(item, 'content') or text(item, 'encoded'))[:1400],
+                          source=publisher, via='Google News' if google else None,
                           sourceId=key, published=published, timestamp=timestamp))
-    if not items and not (key == 'google' and root.find('channel') is not None):
-        raise ValueError('No readable stories in feed')
     return {'items': items, 'fetchedAt': time.time()}
 
 
@@ -126,15 +212,19 @@ def google_feed_url(query='', hours=0):
         dict(q=query, hl='en-US', gl='US', ceid='US:en'))
 
 
-def load_feed(key, url=None):
+def load_feed(key, url=None, source=None):
+    source = source or next((s for s in sources() if s['id'] == key), None)
+    if source is None:
+        raise ValueError('Unknown news source')
     try:
-        url = url or FEEDS[key][1]
-        value, stale = cached('feed:' + key + (':' + url if key == 'google' else ''),
-                              300, lambda: parse_feed(fetch(url), key), stale=True)
-        return value['items'], dict(id=key, name=FEEDS[key][0], status='cached' if stale else 'ok',
+        url = url or source['url']
+        original = key in FEEDS and source['name'] == FEEDS[key][0] and source['url'] == FEEDS[key][1]
+        cache_key = 'feed:' + key + (':' + url if key == 'google' else '') if original else 'custom-feed:' + key + ':' + source['name'] + ':' + url
+        value, stale = cached(cache_key, 300, lambda: parse_feed(fetch(url), key, source), stale=True)
+        return value['items'], dict(id=key, name=source['name'], status='cached' if stale else 'ok',
                                    fetchedAt=value['fetchedAt'], count=len(value['items']))
     except Exception as exc:
-        return [], dict(id=key, name=FEEDS[key][0], status='error', count=0,
+        return [], dict(id=key, name=source['name'], status='error', count=0,
                         error='Feed unavailable: ' + type(exc).__name__)
 
 
@@ -162,7 +252,8 @@ def compile_query(query):
 
 
 def news(params):
-    keys = [k for k in params.get('sources', ','.join(FEEDS)).split(',') if k in FEEDS]
+    registry = {source['id']: source for source in sources() if source['enabled']}
+    keys = list(dict.fromkeys(k for k in params.get('sources', ','.join(registry)).split(',') if k in registry))
     match = compile_query(params.get('q', '')[:500])
     try:
         hours = max(0, min(float(params.get('hours', 0)), 24 * 365))
@@ -170,7 +261,7 @@ def news(params):
         raise ValueError('Invalid date range')
     cutoff = time.time() - hours * 3600 if hours else 0
     items, statuses = [], []
-    tasks = [(key, google_feed_url(params.get('q', ''), hours) if key == 'google' else None) for key in keys]
+    tasks = [(key, google_feed_url(params.get('q', ''), hours) if key == 'google' and registry[key]['url'] == FEEDS['google'][1] else None, registry[key]) for key in keys]
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
         for result, status in pool.map(lambda task: load_feed(*task), tasks):
             items.extend(result)
@@ -179,7 +270,7 @@ def news(params):
     filtered = []
     for item in sorted(items, key=lambda i: i['timestamp'] or 0, reverse=True):
         signature = re.sub(r'\W', '', item['title'].casefold())
-        if signature in seen or (item.get('sourceId') != 'google' and not match(item['title'] + ' ' + item['summary'])):
+        if signature in seen or (item.get('via') != 'Google News' and not match(item['title'] + ' ' + item['summary'])):
             continue
         if hours and (item['timestamp'] is None or item['timestamp'] < cutoff):
             continue
@@ -471,29 +562,41 @@ def open_reader(url):
     return {'opened': True}
 
 
+def test_feed(data):
+    source = dict(id=data.get('id', 'test'), name='Feed preview', url=feed_url(data.get('url')))
+    try:
+        result = parse_feed(fetch(source['url']), source['id'], source)
+    except ET.ParseError:
+        raise ValueError('This URL does not return valid RSS or Atom XML')
+    return dict(count=len(result['items']), sample=result['items'][0]['title'] if result['items'] else None)
+
+
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         host = self.headers.get('Host', '')
+        settings = self.path in ('/api/sources', '/api/sources/test')
         if (host.split(':')[0] not in ('127.0.0.1', 'localhost')
                 or self.headers.get('Origin') != 'http://' + host
-                or self.headers.get('X-News-OSINT') != 'reader'):
+                or self.headers.get('X-News-OSINT') != ('settings' if settings else 'reader')):
             self.send_error(403)
             return
-        if self.path != '/api/reader':
+        if self.path not in ('/api/reader', '/api/sources', '/api/sources/test'):
             self.send_error(404)
             return
         try:
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= 16000:
-                raise ValueError('Invalid reader request')
+            if not 0 < length <= (500000 if settings else 16000):
+                raise ValueError('Invalid request size')
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
-                raise ValueError('Invalid reader request')
-            self.respond(json.dumps(open_reader(data.get('url'))).encode(), 'application/json')
+                raise ValueError('Invalid request')
+            result = save_sources(data.get('sources')) if self.path == '/api/sources' else test_feed(data) if settings else open_reader(data.get('url'))
+            self.respond(json.dumps(result).encode(), 'application/json')
         except ValueError as exc:
             self.respond(json.dumps({'error': str(exc)}).encode(), 'application/json', 400)
         except OSError:
-            self.respond(json.dumps({'error': 'The article reader could not start. Use Open in browser instead.'}).encode(), 'application/json', 503)
+            message = 'Feed could not be fetched. Check the URL and connection.' if self.path == '/api/sources/test' else 'Feed settings could not be saved.' if settings else 'The article reader could not start. Use Open in browser instead.'
+            self.respond(json.dumps({'error': message}).encode(), 'application/json', 503)
 
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
@@ -504,6 +607,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             routes = {'/api/health': lambda: {'app': 'news-osint', 'version': '0.1'},
                       '/api/theme': theme, '/api/news': lambda: news(params),
+                      '/api/sources': lambda: {'sources': sources()},
                       '/api/places': lambda: places(params.get('q', '')),
                       '/api/wiki-search': lambda: wikipedia_search(params.get('q', '')),
                       '/api/wiki-section': lambda: wikipedia_section(params.get('id', ''), params.get('section', '')),

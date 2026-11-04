@@ -10,7 +10,7 @@
 <body>
   <header class="app-header">
     <div class="brand"><img src="icon.svg" alt=""><div><strong>NEWS<span>—</span>OSINT</strong><small>OPEN SOURCE · LOCAL DESK</small></div></div>
-    <div class="header-actions"><span class="theme-badge"><i></i> Omarchy theme</span><button id="toggle-left">Filters</button><button id="toggle-right">Map</button><button id="reset-layout" title="Restore 25 / 50 / 25 layout">Reset layout</button><button id="export">Export CSV</button></div>
+    <div class="header-actions"><span class="theme-badge"><i></i> Omarchy theme</span><button id="settings-open">Settings</button><button id="toggle-left">Filters</button><button id="toggle-right">Map</button><button id="reset-layout" title="Restore 25 / 50 / 25 layout">Reset layout</button><button id="export">Export CSV</button></div>
   </header>
   <main id="workspace">
     <aside id="left" class="panel filters">
@@ -21,7 +21,7 @@
         <label for="query">Search coverage</label><input id="query" placeholder='City, topic, or "exact phrase"' maxlength="500">
         <details class="search-help"><summary>Advanced search</summary><p>Words use AND. Use <code>OR</code> between alternatives, <code>"exact phrases"</code>, and <code>-word</code> to exclude. Google News searches your query directly; publisher feeds are filtered by their available headlines and excerpts.</p></details>
         <label for="hours">Published within</label><select id="hours"><option value="0">All available feed stories</option><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select>
-        <fieldset><legend>Sources</legend><label><input type="checkbox" value="google" checked> Google News</label><label><input type="checkbox" value="bbc" checked> BBC World</label><label><input type="checkbox" value="guardian" checked> The Guardian</label><label><input type="checkbox" value="aljazeera" checked> Al Jazeera</label><label><input type="checkbox" value="npr" checked> NPR World</label><label><input type="checkbox" value="france24" checked> France 24</label></fieldset>
+        <fieldset id="source-filters"><legend>Sources</legend><p class="muted">Loading sources…</p></fieldset>
         <button type="submit" class="primary">Search news <span>↗</span></button>
         <div class="button-pair"><button type="button" id="save-search">Save search</button><button type="button" id="google">Open in Google ↗</button></div>
       </form>
@@ -55,5 +55,14 @@
   </main>
   <footer class="app-footer"><span><i></i> LOCAL WORKSPACE</span><span id="footer-status">Ready</span><span>News-OSINT / 0.1</span></footer>
   <div id="toast" role="status" hidden></div>
+  <dialog id="settings-dialog" aria-labelledby="settings-title">
+    <div class="settings-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h2 id="settings-title">News sources</h2></div><button id="settings-close" aria-label="Close settings">×</button></div>
+    <p class="settings-intro muted">Add RSS or Atom feeds to your news desk. Enable the feeds you want available in the search filters.</p>
+    <div class="settings-scroll"><div id="settings-sources"></div>
+    <section class="add-feed"><h3>Add a feed</h3><form id="add-feed-form"><label>Name<input id="new-feed-name" placeholder="Source name" maxlength="120" required></label><label>RSS or Atom URL<input id="new-feed-url" type="url" placeholder="https://example.org/feed.xml" maxlength="4000" required></label><button type="submit">Add to list</button></form></section>
+    <p id="settings-status" role="status"></p>
+    </div>
+    <div class="settings-footer"><button id="settings-cancel">Cancel</button><button id="settings-save" class="primary">Save changes</button></div>
+  </dialog>
 </body>
 </html>
