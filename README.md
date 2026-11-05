@@ -23,6 +23,7 @@ to use an existing browser instead.
 - Publication date and source filters; saved searches and optional auto refresh.
 - Manual Google News research links and CSV export.
 - 16px headlines and scrollbars that follow the current Omarchy palette.
+- Select text in a headline or excerpt to search Wikipedia, find map matches, or search news.
 - Floating, frameless article reader with remembered size and position, back/forward, reload, close, and open-in-browser controls.
 - MapLibre with OpenFreeMap vector tiles, themed from Omarchy's palette; country labels hidden, city labels retained, blue-tinted water and coast outlines.
 - News and Wikipedia search tabs; look up people, organizations, events, and subjects, then search news about the selected topic.
@@ -76,7 +77,7 @@ The first version has individual pins, not marker clustering.
 
 ## Floating article reader
 
-Click a headline or **Read article** to open the publisher's page in a separate,
+Click **Read article** to open the publisher's page in a separate,
 reusable Electron reader window. It has no native title bar, address bar, tabs,
 or status bar. Drag the narrow control strip to move it; resize the window edges.
 Escape or Ctrl+W closes it. Alt+Left/Right navigates history and Ctrl+R reloads.
@@ -106,6 +107,14 @@ expandable sections beneath the map. **Search news about this** switches back
 to News with the topic filled in. **Read full article** uses the floating reader.
 Geolocated articles offer **Show on map**; selecting a person or general subject
 does not move the map. Article sections load on demand as plain text.
+
+Headlines are plain, selectable text. Highlight a phrase in a headline or
+publisher excerpt to open a small research toolbar. **Wikipedia** fills and runs
+the left Wikipedia search; **Find on map** shows possible matches on the right
+before you choose a location; **Search news** searches for the selected phrase.
+The map action can link the chosen location to the original story. Escape,
+clicking elsewhere, or scrolling dismisses the toolbar. **Read article** remains
+the action for opening the floating reader.
 
 Map water blends 15% of the active theme's blue with 85% of its background.
 Country names are hidden while city labels remain visible at suitable zooms.

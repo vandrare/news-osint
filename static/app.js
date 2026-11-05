@@ -130,6 +130,7 @@ async function loadNews() {
 }
 
 function renderStories() {
+  hideSelectionTools();
   const fragment = document.createDocumentFragment();
   if (!state.items.length) fragment.append(empty('No matching coverage.', 'Try broader terms, a longer date range, or more sources. RSS feeds contain a limited selection of recent stories.'));
   for (const item of state.items) {
@@ -137,8 +138,8 @@ function renderStories() {
     const meta = make('div', undefined, 'story-meta'); meta.append(make('span', item.source, 'source-tag'));
     if (item.via) meta.append(make('span', 'via ' + item.via));
     meta.append(make('span', '·'), make('time', dateLabel(item.timestamp)));
-    const title = make('h3'); title.append(articleLink(item.title, item.url)); article.append(meta, title);
-    if (item.summary) article.append(make('p', item.summary));
+    const title = make('h3',item.title); title.className='research-text'; article.append(meta, title);
+    if (item.summary) article.append(make('p', item.summary,'research-text'));
     const actions = make('div', undefined, 'story-actions'); actions.append(articleLink('Read article ↗', item.url));
     const external = link('Open in browser ↗', item.url); external.className = 'external-story-link'; actions.append(external);
     actions.append(button('Locate', () => locateStory(item)), button('Copy link', async () => { try { await navigator.clipboard.writeText(item.url); toast('Story link copied.'); } catch { toast('Could not copy. Open the publisher link to copy its address.'); } }));
@@ -152,6 +153,64 @@ function renderStories() {
   }
   $('stories').replaceChildren(fragment);
 }
+
+let selectingText=false, researchSelection=null;
+function hideSelectionTools() { $('selection-tools').hidden=true;researchSelection=null; }
+function showSelectionTools() {
+  if(selectingText || $('settings-dialog').open)return;
+  const selection=window.getSelection();
+  if(!selection || selection.isCollapsed || selection.rangeCount!==1){hideSelectionTools();return;}
+  const text=selection.toString().replace(/\s+/g,' ').trim();
+  const element=node=>node?.nodeType===Node.ELEMENT_NODE?node:node?.parentElement;
+  const start=element(selection.anchorNode)?.closest('.research-text');
+  const end=element(selection.focusNode)?.closest('.research-text');
+  const story=start?.closest('.story');
+  if(!text || text.length>180 || !story || !$('stories').contains(story) || story!==end?.closest('.story')){hideSelectionTools();return;}
+  const range=selection.getRangeAt(0),rect=range.getBoundingClientRect();
+  const bounds=$('stories').getBoundingClientRect();
+  if(rect.bottom<bounds.top || rect.top>bounds.bottom){hideSelectionTools();return;}
+  researchSelection={text,storyId:story.dataset.id};
+  const tools=$('selection-tools');$('selection-label').textContent=text;tools.hidden=false;
+  const width=tools.offsetWidth,height=tools.offsetHeight;
+  tools.style.left=Math.max(8,Math.min(rect.left+(rect.width-width)/2,innerWidth-width-8))+'px';
+  const above=rect.top-height-10;
+  tools.style.top=Math.max(8,Math.min(above>=8?above:rect.bottom+10,innerHeight-height-8))+'px';
+}
+function researchSelected(action) {
+  const chosen=researchSelection;if(!chosen)return;
+  hideSelectionTools();window.getSelection()?.removeAllRanges();
+  document.body.classList.remove('map-expanded');$('expand-map').textContent='⤢ Expand';
+  if(action==='wikipedia') {
+    document.body.classList.remove('hide-left');if(innerWidth<=760)document.body.classList.add('hide-right');
+    switchSearchTab('wikipedia');$('wiki-query').value=chosen.text;$('left').scrollTo({top:0});$('wiki-query').focus({preventScroll:true});searchWikipedia();
+  } else if(action==='map') {
+    document.body.classList.remove('hide-right');if(innerWidth<=760)document.body.classList.add('hide-left');
+    state.pendingStory=state.items.find(item=>item.id===chosen.storyId)||null;
+    $('place-query').value=chosen.text;$('right').scrollTo({top:0});$('place-query').focus({preventScroll:true});findPlaces(chosen.text);
+  } else if(action==='news') {
+    document.body.classList.remove('hide-left');if(innerWidth<=760)document.body.classList.add('hide-right');
+    switchSearchTab('news');$('query').value='"'+chosen.text.replaceAll('"','')+'"';$('left').scrollTo({top:0});$('query').focus({preventScroll:true});loadNews();
+  }
+}
+
+document.addEventListener('pointerdown',event=>{
+  if($('selection-tools').contains(event.target))return;
+  if(!$('stories').contains(event.target)&&!$('selection-tools').hidden)window.getSelection()?.removeAllRanges();
+  selectingText=$('stories').contains(event.target);hideSelectionTools();
+});
+document.addEventListener('pointerup',()=>{const wasSelecting=selectingText;selectingText=false;if(wasSelecting)requestAnimationFrame(showSelectionTools);});
+document.addEventListener('pointercancel',()=>{selectingText=false;hideSelectionTools();});
+document.addEventListener('selectionchange',()=>{if(!selectingText)requestAnimationFrame(showSelectionTools);});
+$('selection-tools').addEventListener('pointerdown',event=>{if(event.pointerType==='mouse')event.preventDefault();});
+for(const action of ['wikipedia','map','news'])$('selection-'+action).addEventListener('click',()=>researchSelected(action));
+$('selection-tools').addEventListener('keydown',event=>{
+  if(['ArrowLeft','ArrowRight'].includes(event.key)) {
+    event.preventDefault();const buttons=[...$('selection-tools').querySelectorAll('button')];const index=buttons.indexOf(document.activeElement);buttons[(index+(event.key==='ArrowRight'?1:buttons.length-1))%buttons.length].focus();
+  }
+});
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!$('selection-tools').hidden){hideSelectionTools();window.getSelection()?.removeAllRanges();}});
+document.addEventListener('scroll',hideSelectionTools,true);
+window.addEventListener('resize',hideSelectionTools);
 
 function locateStory(item) {
   state.selected = item.id; state.pendingStory = item; renderStories();
