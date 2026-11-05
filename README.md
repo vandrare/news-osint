@@ -31,6 +31,10 @@ to use an existing browser instead.
 - Manually linked story locations, map pins, and population dates where available.
 - Source health and timestamps, 5-minute feed caching, last-good results when feeds fail.
 - Settings for adding, testing, renaming, enabling, disabling, and removing RSS/Atom sources.
+- Bookmarks with notes and attached locations/Wikipedia references; export saved research as JSON.
+- Conservative grouping of similar headlines with every publisher still accessible.
+- OPML feed import/export and restoration of map, panels, reference, and saved/news view.
+- Google research presets for official sources, PDF reports, and academic PDFs, with an editable query.
 
 ## Feed settings
 
@@ -51,6 +55,43 @@ computer. Saved searches retain their source selections for feeds that still exi
 Google News's default feed URL retains its query-specific search behavior. If
 you replace that URL, it is read and filtered as an ordinary RSS/Atom feed.
 
+**Import OPML** merges feeds into the current settings draft and skips existing
+URLs. Review the entries, then save to apply them. Importing does not overwrite
+existing entries. **Export OPML** downloads the current draft, including disabled
+feeds; app-specific identifiers preserve the Google News behavior on reimport.
+
+## Research, saved stories, and workspace
+
+**Research** in the header or text-selection toolbar opens the Google query
+builder. Presets include general web search, official sources (UN, EU, and
+`.gov`), PDF reports, and academic PDFs (`.edu` / `.ac.uk`). You can add domains,
+date bounds, and excluded terms, or edit the query directly. **Open in reader**
+and **Open in browser** use regular Google web search, not Google News. Results
+are browsed directly and are not scraped or imported into the news column.
+Google dates are page-date estimates, not verified event dates. **Save query**
+keeps the query in the sidebar's saved searches.
+
+Use **Save** on a story, then **Saved** in the header to view its retained
+headline, publisher excerpt, and link even after it leaves the RSS feed. Add
+notes and explicitly attach the current Wikipedia reference or selected map
+location. Locations manually linked to that story are retained automatically.
+**Export saved research** downloads bookmarks, notes, locations, and reference
+links as JSON. Saved stories do not contain a full copy of the publisher page.
+
+**Group similar coverage** groups near-matching headlines while keeping each
+original publisher and its article link under **Other coverage**. This uses a
+conservative text-similarity rule, not a verified event classification or a
+claim that reports independently corroborate each other. Turn it off for a flat
+feed. Duplicate URLs are removed; matching headlines at distinct publisher URLs
+are retained.
+
+The app restores the last map view, selected reference and location, panel
+visibility, and news/saved view. It also keeps the last successful news result
+for the current search. If a refresh fails, matching cached coverage is shown
+with its last check time. Source health displays collection times and marks
+stale offline cache separately from unavailable sources with no cache. Saved
+references can show cached background when Wikipedia cannot be refreshed.
+
 ## Coverage and limitations
 
 Google News receives the search query and publication window directly; publisher
@@ -63,7 +104,7 @@ rejected when a search term appears in the article body but not its headline.
 Search covers the stories returned by the selected RSS feeds. Choosing
 seven days does not retrieve a seven-day archive. It only filters the feed's
 available entries. This is not a comprehensive web search or a Google scraper.
-The “Open in Google” button also opens a separate Google News search.
+The “Google News” button also opens a separate Google News search.
 
 Summaries are publisher-provided feed excerpts, not AI-written summaries or full
 article copies. Locations are selected manually; articles are not automatically
@@ -129,6 +170,8 @@ The server binds only to 127.0.0.1. No account or analytics. Theme files are rea
 never edited; desktop theme changes are polled every three seconds. Backend
 cache and logs: `~/.local/state/news-osint/`. Saved searches, layout, and manually
 linked locations live in the dedicated Chromium profile in that directory.
+Bookmarks, notes, attached references, workspace state, and recent cached results
+also live in that browser profile's local storage. They are not committed to Git.
 The server remains available after closing the window for fast reopening.
 
 Requests go to the configured publishers, Wikipedia/Wikidata, and OpenFreeMap.
@@ -156,3 +199,4 @@ does not fetch executable JavaScript from a CDN at startup.
 to run the app. `python3 -m unittest discover -s tests -v` runs backend tests.
 `node --check static/app.js` checks the frontend's syntax.
 `node --test tests/geometry.test.cjs` checks geometry validation and display fallback.
+`node --test tests/research-utils.test.mjs` checks grouping, Google queries, and OPML escaping.

@@ -269,7 +269,7 @@ def news(params):
     seen = set()
     filtered = []
     for item in sorted(items, key=lambda i: i['timestamp'] or 0, reverse=True):
-        signature = re.sub(r'\W', '', item['title'].casefold())
+        signature = item.get('url') or re.sub(r'\W', '', item['title'].casefold())
         if signature in seen or (item.get('via') != 'Google News' and not match(item['title'] + ' ' + item['summary'])):
             continue
         if hours and (item['timestamp'] is None or item['timestamp'] < cutoff):
@@ -522,7 +522,8 @@ def profile(pageid):
         except Exception:
             result['notice'] = 'Wikidata facts are temporarily unavailable.'
         return result
-    return cached('profile:v5:' + str(pageid), 86400, lookup, stale=True)[0]
+    value, stale = cached('profile:v5:' + str(pageid), 86400, lookup, stale=True)
+    return {**value, 'cacheStale': stale}
 
 
 def theme():

@@ -10,7 +10,7 @@
 <body>
   <header class="app-header">
     <div class="brand"><img src="icon.svg" alt=""><div><strong>NEWS<span>—</span>OSINT</strong><small>OPEN SOURCE · LOCAL DESK</small></div></div>
-    <div class="header-actions"><span class="theme-badge"><i></i> Omarchy theme</span><button id="settings-open">Settings</button><button id="toggle-left">Filters</button><button id="toggle-right">Map</button><button id="reset-layout" title="Restore 25 / 50 / 25 layout">Reset layout</button><button id="export">Export CSV</button></div>
+    <div class="header-actions"><span class="theme-badge"><i></i> Omarchy theme</span><button id="saved-view">Saved</button><button id="research-open">Research</button><button id="settings-open">Settings</button><button id="toggle-left">Filters</button><button id="toggle-right">Map</button><button id="reset-layout" title="Restore 25 / 50 / 25 layout">Reset layout</button><button id="export">Export CSV</button></div>
   </header>
   <main id="workspace">
     <aside id="left" class="panel filters">
@@ -23,7 +23,7 @@
         <label for="hours">Published within</label><select id="hours"><option value="0">All available feed stories</option><option value="24">24 hours</option><option value="72">3 days</option><option value="168">7 days</option></select>
         <fieldset id="source-filters"><legend>Sources</legend><p class="muted">Loading sources…</p></fieldset>
         <button type="submit" class="primary">Search news <span>↗</span></button>
-        <div class="button-pair"><button type="button" id="save-search">Save search</button><button type="button" id="google">Open in Google ↗</button></div>
+        <div class="button-pair"><button type="button" id="save-search">Save search</button><button type="button" id="google">Google News ↗</button></div>
       </form>
       <section class="sidebar-section"><label for="refresh">Auto refresh</label><select id="refresh"><option value="0">Off</option><option value="5">Every 5 minutes</option><option value="15">Every 15 minutes</option><option value="30">Every 30 minutes</option></select></section>
       <section class="sidebar-section"><div class="label-row"><h2>Saved searches</h2><span id="saved-count">0</span></div><div id="saved-list"></div></section>
@@ -40,6 +40,7 @@
     <section id="center" class="panel news-panel">
       <div class="news-heading"><div><span class="eyebrow">02 / THE WIRE</span><h2 id="results-title">Latest coverage</h2></div><button id="refresh-now" title="Check cached feeds for new coverage">↻ Refresh</button></div>
       <div class="news-meta"><span id="result-count" role="status">Connecting to your sources…</span><span id="checked-at"></span></div>
+      <div class="coverage-controls"><label><input id="group-coverage" type="checkbox" checked> Group similar coverage</label><button id="view-news" hidden>Back to news</button><button id="export-research" hidden>Export saved research</button></div>
       <div id="news-notice" class="notice" hidden></div>
       <div id="stories" class="stories" aria-busy="true"><div class="empty"><span class="empty-symbol">◎</span><h3>Gathering the latest.</h3><p>Checking your selected public news feeds.</p></div></div>
     </section>
@@ -53,17 +54,24 @@
       <div id="location-info" class="location-info"><span class="eyebrow">PLACE CONTEXT</span><h2>A little perspective.</h2><p class="muted">Find a city or region to explore its background, population, and country. You can also enter latitude, longitude.</p><p class="muted">Story locations are added manually using “Locate” so a mentioned place is never presented as a verified event location.</p></div>
     </aside>
   </main>
-  <footer class="app-footer"><span><i></i> LOCAL WORKSPACE</span><span id="footer-status">Ready</span><span>News-OSINT / 0.1</span></footer>
+  <footer class="app-footer"><span><i></i> LOCAL WORKSPACE</span><span id="footer-status">Ready</span><span id="connection-status">News-OSINT / 0.1</span></footer>
   <div id="toast" role="status" hidden></div>
-  <div id="selection-tools" role="toolbar" aria-label="Research selected text" hidden><span id="selection-label"></span><div><button id="selection-wikipedia">Wikipedia</button><button id="selection-map">Find on map</button><button id="selection-news">Search news</button></div></div>
+  <div id="selection-tools" role="toolbar" aria-label="Research selected text" hidden><span id="selection-label"></span><div><button id="selection-wikipedia">Wikipedia</button><button id="selection-map">Find on map</button><button id="selection-news">Search news</button><button id="selection-research">Research</button></div></div>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
     <div class="settings-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h2 id="settings-title">News sources</h2></div><button id="settings-close" aria-label="Close settings">×</button></div>
     <p class="settings-intro muted">Add RSS or Atom feeds to your news desk. Enable the feeds you want available in the search filters.</p>
-    <div class="settings-scroll"><div id="settings-sources"></div>
+    <div class="settings-scroll"><div class="opml-actions"><button id="import-opml">Import OPML</button><button id="export-opml">Export OPML</button><input id="opml-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden></div><div id="settings-sources"></div>
     <section class="add-feed"><h3>Add a feed</h3><form id="add-feed-form"><label>Name<input id="new-feed-name" placeholder="Source name" maxlength="120" required></label><label>RSS or Atom URL<input id="new-feed-url" type="url" placeholder="https://example.org/feed.xml" maxlength="4000" required></label><button type="submit">Add to list</button></form></section>
     <p id="settings-status" role="status"></p>
     </div>
     <div class="settings-footer"><button id="settings-cancel">Cancel</button><button id="settings-save" class="primary">Save changes</button></div>
+  </dialog>
+  <dialog id="research-dialog" aria-labelledby="research-title"><div class="settings-heading"><div><span class="eyebrow">GOOGLE DORKS</span><h2 id="research-title">Research the wider web</h2></div><button id="research-close" aria-label="Close research">×</button></div>
+    <div class="research-fields"><label>Subject<input id="research-subject" maxlength="500" placeholder="Euphrates River"></label><label>Preset<select id="research-preset"><option value="general">General web search</option><option value="official">Official sources · UN / EU / .gov</option><option value="pdf">PDF reports</option><option value="academic">Academic PDFs · .edu / .ac.uk</option><option value="custom">Custom search</option></select></label>
+    <label>Limit to domains, optional<input id="research-sites" placeholder="un.org, europa.eu" maxlength="500"></label><div class="research-dates"><label>After<input id="research-after" type="date"></label><label>Before<input id="research-before" type="date"></label></div><label>Exclude words or phrases, comma separated<input id="research-exclude" maxlength="500" placeholder="tourism, cruise"></label>
+    <label>Query — editable<textarea id="research-query" rows="3" maxlength="3000"></textarea></label></div>
+    <p class="muted research-hint">Opens regular Google web results. Date filters use Google's page-date estimates. Results stay in the reader or browser.</p><p id="research-status" role="status"></p>
+    <div class="research-buttons"><button id="research-save">Save query</button><button id="research-browser">Open in browser ↗</button><button id="research-reader" class="primary">Open in reader ↗</button></div>
   </dialog>
 </body>
 </html>

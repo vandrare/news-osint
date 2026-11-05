@@ -211,6 +211,15 @@ class NewsTests(unittest.TestCase):
         self.assertEqual(result['items'][0]['source'],'My RSS')
         self.assertEqual(result['sources'][0]['id'],'custom')
 
+    def test_same_headline_from_different_publishers_is_preserved(self):
+        stories=[dict(id='a',title='Same event',url='https://one.example/story',summary='',timestamp=time.time()),
+                 dict(id='b',title='Same event',url='https://two.example/story',summary='',timestamp=time.time()),
+                 dict(id='c',title='Same event',url='https://one.example/story',summary='',timestamp=time.time())]
+        with patch.object(server,'load_feed',return_value=(stories,{'status':'ok'})):
+            result=server.news({'sources':'bbc'})
+        self.assertEqual(len(result['items']),2)
+        self.assertEqual({s['url'] for s in result['items']},{'https://one.example/story','https://two.example/story'})
+
 
 if __name__ == '__main__':
     unittest.main()
