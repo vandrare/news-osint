@@ -25,7 +25,7 @@ to use an existing browser instead.
 - 16px headlines and scrollbars that follow the current Omarchy palette.
 - Select text in a headline or excerpt to search Wikipedia, find map matches, or search news.
 - Floating, frameless article reader with remembered size and position, back/forward, reload, close, and open-in-browser controls.
-- MapLibre with OpenFreeMap vector tiles, themed from Omarchy's palette; country labels hidden, city labels retained, blue-tinted water and coast outlines.
+- Selectable StarDock-style overview (default) or detailed map, both following Omarchy's palette, with country names hidden and city labels retained.
 - News and Wikipedia search tabs; look up people, organizations, events, and subjects, then search news about the selected topic.
 - Wikipedia place search, latitude/longitude navigation, Wikipedia/Wikidata profiles, infobox facts, and expandable article sections beneath the map.
 - Manually linked story locations, map pins, and population dates where available.
@@ -38,7 +38,7 @@ to use an existing browser instead.
 
 ## Feed settings
 
-Open **Settings** in the header to manage news sources. The six initial entries
+Open **Settings** in the header and use **News sources** to manage feeds. The six initial entries
 are Google News, BBC World, The Guardian, Al Jazeera, NPR World, and France 24.
 Enter a name and RSS or Atom URL, select **Add to list**, then **Save changes**.
 **Test feed** checks the URL and reports how many readable stories it provides.
@@ -59,6 +59,28 @@ you replace that URL, it is read and filtered as an ordinary RSS/Atom feed.
 URLs. Review the entries, then save to apply them. Importing does not overwrite
 existing entries. **Export OPML** downloads the current draft, including disabled
 feeds; app-specific identifiers preserve the Google News behavior on reimport.
+
+## Map appearance
+
+**Settings → Preferred map** offers two appearances:
+
+- **StarDock-style overview** (default): subdued colors blended from the theme's
+  background and foreground, with coastlines, rivers, borders, urban areas, and
+  small city labels. Roads, buildings, airports, and extra geographic labels are hidden.
+- **Detailed map**: the previous themed map with roads, buildings, and more detail
+  for closer inspection. Water retains its 15% theme-blue / 85% background blend.
+
+Choose a map and **Save changes** to apply it; **Cancel** keeps the current map.
+Switching retains the map position, zoom, story markers, and location searches.
+The preference is saved in the app's local browser profile. Map-only changes
+leave the current news or Saved view in place.
+
+The overview adapts StarDock's surface/text color relationships: sea at 5% and
+land at 13% of the theme foreground over its background, with subdued outlines.
+Both appearances use MapLibre and OpenFreeMap's online tiles and label fonts.
+The cached style definition can be reused when unavailable, but map data still
+needs connectivity or existing browser cache; a fully bundled offline map is a
+separate capability.
 
 ## Research, saved stories, and workspace
 
@@ -157,8 +179,8 @@ The map action can link the chosen location to the original story. Escape,
 clicking elsewhere, or scrolling dismisses the toolbar. **Read article** remains
 the action for opening the floating reader.
 
-Map water blends 15% of the active theme's blue with 85% of its background.
-Country names are hidden while city labels remain visible at suitable zooms.
+Country names are hidden in both map appearances while city labels remain
+visible at suitable zooms.
 
 News, map tiles, and new place profiles require the internet. Previously fetched
 news and profiles are cached on disk. Free third-party services may change or
@@ -200,3 +222,4 @@ to run the app. `python3 -m unittest discover -s tests -v` runs backend tests.
 `node --check static/app.js` checks the frontend's syntax.
 `node --test tests/geometry.test.cjs` checks geometry validation and display fallback.
 `node --test tests/research-utils.test.mjs` checks grouping, Google queries, and OPML escaping.
+`node --test tests/map-styles.test.mjs` checks map appearances and theme palettes.

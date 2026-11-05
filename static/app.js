@@ -1,6 +1,7 @@
 'use strict';
 import * as maplibregl from './vendor/maplibre-gl.mjs';
 import {groupCoverage,googleResearchQuery,exportOpml,importOpml} from './research-utils.mjs';
+import {MAP_STYLE_URL,mapMode,buildMapStyle} from './map-styles.mjs';
 maplibregl.setWorkerUrl(new URL('./vendor/maplibre-gl-worker.mjs', import.meta.url).href);
 const $ = (id) => document.getElementById(id);
 const make = (tag, text, className) => { const el = document.createElement(tag); if (text !== undefined) el.textContent = text; if (className) el.className = className; return el; };
@@ -33,6 +34,7 @@ function dateLabel(timestamp) { if (!timestamp) return 'Date unavailable'; retur
 function empty(title, message) { const box = make('div', undefined, 'empty'); box.append(make('span', '◎', 'empty-symbol'), make('h3', title), make('p', message)); return box; }
 
 const workspace=readStore('news-osint.workspace',{});
+state.mapMode=mapMode(readStore('news-osint.map-style',null));
 state.restoringWorkspace=true;
 state.bookmarks=readStore('news-osint.bookmarks',{});state.view=workspace.view==='saved'?'saved':'news';
 state.reference=workspace.reference||null;
@@ -118,6 +120,7 @@ async function openSettings() {
   $('settings-open').disabled=true;
   try {
     const data=await get('/api/sources');state.sourceDraft=data.sources.map(s=>({...s}));renderSettingsSources();
+    $('map-style-choice').value=state.mapMode;
     $('settings-status').textContent='';$('add-feed-form').reset();$('settings-dialog').showModal();
   } catch(error){toast(error.message);}
   finally{$('settings-open').disabled=false;}
@@ -128,10 +131,12 @@ async function saveSettings() {
   const previous=new Set((state.sources||[]).filter(s=>s.enabled).map(s=>s.id));
   const selected=new Set(filters().sources.split(','));$('settings-save').disabled=true;$('settings-status').textContent='Saving…';
   try {
-    const data=await settingsRequest('/api/sources',{sources:state.sourceDraft});state.sources=data.sources;
+    const data=await settingsRequest('/api/sources',{sources:state.sourceDraft});
+    const sourcesChanged=JSON.stringify(state.sources)!==JSON.stringify(data.sources);state.sources=data.sources;
     for(const source of data.sources)if(source.enabled&&!previous.has(source.id))selected.add(source.id);
     renderSourceFilters(data.sources,selected);writeStore('news-osint.known-sources',data.sources.map(s=>s.id));
-    $('settings-dialog').close();toast('News sources saved.');loadNews();
+    applyMapMode($('map-style-choice').value);
+    $('settings-dialog').close();toast('Settings saved.');if(sourcesChanged)loadNews();
   } catch(error){$('settings-status').textContent=error.message;}
   finally{$('settings-save').disabled=false;}
 }
@@ -434,33 +439,37 @@ function renderSaved() {
   });
 }
 
-function mixColor(first, second, ratio) {
-  const a = first.slice(1).match(/../g).map(x => parseInt(x, 16));
-  const b = second.slice(1).match(/../g).map(x => parseInt(x, 16));
-  return '#' + a.map((x, i) => Math.round(x * (1-ratio) + b[i] * ratio).toString(16).padStart(2,'0')).join('');
-}
-function paintMap() {
-  if (!state.map?.isStyleLoaded()) return;
-  const t = state.theme;
-  const land = t.background;
-  const water = mixColor(t.background, t.blue, .15);
-  const coast = mixColor(t.blue, t.foreground, .25);
-  for (const layer of state.map.getStyle().layers) {
-    const id = layer.id.toLowerCase();
-    try {
-      if (layer.type === 'background') state.map.setPaintProperty(layer.id, 'background-color', land);
-      if (layer.type === 'fill') {
-        const isWater = layer['source-layer'] === 'water' || /water/.test(id);
-        state.map.setPaintProperty(layer.id, 'fill-color', isWater ? water : /park|wood|forest|grass/.test(id) ? mixColor(land,t.green,.16) : /building/.test(id) ? t.lighter_background : land);
-        if (isWater) state.map.setPaintProperty(layer.id, 'fill-outline-color', coast);
-      }
-      if (layer.type === 'line') state.map.setPaintProperty(layer.id, 'line-color', /water/.test(id) ? t.blue : /boundary/.test(id) ? t.accent : t.selection);
-      if (layer.type === 'symbol' && layer.layout?.['text-field']) { state.map.setPaintProperty(layer.id, 'text-color', /water/.test(id) ? t.blue : t.foreground); state.map.setPaintProperty(layer.id, 'text-halo-color', t.background); }
-      if (layer.type === 'symbol' && /country/.test(id)) state.map.setLayoutProperty(layer.id, 'visibility', 'none');
-      if (layer.type === 'fill-extrusion') state.map.setPaintProperty(layer.id, 'fill-extrusion-color', t.lighter_background);
-    } catch { /* Optional style properties differ by provider. */ }
+async function loadBaseMapStyle(){
+  try{
+    const base=await get(MAP_STYLE_URL);
+    if(base.version!==8||!Array.isArray(base.layers))throw new Error('Invalid map style');
+    writeStore('news-osint.map-base-style',base);return base;
+  }catch(error){
+    const cached=readStore('news-osint.map-base-style',null);
+    if(cached?.version===8&&Array.isArray(cached.layers))return cached;
+    throw error;
   }
 }
+function applyMapMode(choice){
+  const mode=mapMode(choice);
+  writeStore('news-osint.map-style',mode);
+  if(mode===state.mapMode)return;
+  state.mapMode=mode;
+  if(state.map&&state.baseMapStyle){
+    $('map-status').hidden=false;$('map-status').textContent='Loading '+(mode==='stardock'?'overview':'detailed map')+'…';
+    state.map.setStyle(buildMapStyle(state.baseMapStyle,state.theme,mode));
+  }
+}
+function paintMap(){
+  if(!state.map?.isStyleLoaded()||!state.baseMapStyle)return;
+  const style=buildMapStyle(state.baseMapStyle,state.theme,state.mapMode);
+  for(const layer of style.layers){
+    if(!state.map.getLayer(layer.id))continue;
+    for(const [key,value]of Object.entries(layer.paint||{}))state.map.setPaintProperty(layer.id,key,value);
+    for(const [key,value]of Object.entries(layer.layout||{}))state.map.setLayoutProperty(layer.id,key,value);
+  }
+}
+
 async function loadTheme() {
   try {
     const theme = await get('/api/theme');
@@ -473,19 +482,21 @@ async function loadTheme() {
     state.needsMapPaint = true; paintMap();
   } catch { /* The existing palette remains usable if the local server stops. */ }
 }
-function initMap() {
+async function initMap() {
   try {
+    state.baseMapStyle=await loadBaseMapStyle();
     const remembered=workspace.map;
     const valid=remembered&&Array.isArray(remembered.center)&&remembered.center.length===2&&remembered.center.every(Number.isFinite)&&Math.abs(remembered.center[0])<=180&&Math.abs(remembered.center[1])<=85&&Number.isFinite(remembered.zoom);
-    state.map = new maplibregl.Map({container:'map', style:'https://tiles.openfreemap.org/styles/positron',center:valid?remembered.center:[15,25],zoom:valid?Math.max(0,Math.min(22,remembered.zoom)):1.4,
+    state.map = new maplibregl.Map({container:'map', style:buildMapStyle(state.baseMapStyle,state.theme,state.mapMode),center:valid?remembered.center:[15,25],zoom:valid?Math.max(0,Math.min(22,remembered.zoom)):1.4,
       bearing:valid&&Number.isFinite(remembered.bearing)?remembered.bearing:0,pitch:valid&&Number.isFinite(remembered.pitch)?Math.max(0,Math.min(85,remembered.pitch)):0,attributionControl:true});
     state.map.addControl(new maplibregl.NavigationControl({showCompass:false}), 'top-right');
-    state.map.on('load', () => { $('map-status').hidden = true; paintMap(); syncMarkers();if(state.place)addMarker(state.place); });
+    state.map.on('load', () => { $('map-status').hidden = true; syncMarkers();if(state.place)addMarker(state.place); });
+    state.map.on('style.load',()=>{state.needsMapPaint=false;paintMap();});
     state.map.on('moveend',saveWorkspace);
     state.map.on('error', () => { $('map-status').hidden = false; $('map-status').textContent = 'Some map data could not load. Check your connection; place search and news still work.'; });
     state.map.on('idle', () => { if (state.map.areTilesLoaded()) $('map-status').hidden = true; if (state.needsMapPaint) { state.needsMapPaint = false; paintMap(); } });
     new ResizeObserver(() => state.map.resize()).observe($('map-wrap'));
-  } catch { $('map-status').textContent = 'Map needs WebGL support. News and place profiles remain available.'; }
+  } catch { $('map-status').hidden=false;$('map-status').textContent = 'Map unavailable. Check your connection and browser WebGL support, then reload. News and place profiles remain available.'; }
 }
 
 function applyLayout() {

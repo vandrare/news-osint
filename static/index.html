@@ -58,9 +58,9 @@
   <div id="toast" role="status" hidden></div>
   <div id="selection-tools" role="toolbar" aria-label="Research selected text" hidden><span id="selection-label"></span><div><button id="selection-wikipedia">Wikipedia</button><button id="selection-map">Find on map</button><button id="selection-news">Search news</button><button id="selection-research">Research</button></div></div>
   <dialog id="settings-dialog" aria-labelledby="settings-title">
-    <div class="settings-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h2 id="settings-title">News sources</h2></div><button id="settings-close" aria-label="Close settings">×</button></div>
-    <p class="settings-intro muted">Add RSS or Atom feeds to your news desk. Enable the feeds you want available in the search filters.</p>
-    <div class="settings-scroll"><div class="opml-actions"><button id="import-opml">Import OPML</button><button id="export-opml">Export OPML</button><input id="opml-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden></div><div id="settings-sources"></div>
+    <div class="settings-heading"><div><span class="eyebrow">YOUR WORKSPACE</span><h2 id="settings-title">Settings</h2></div><button id="settings-close" aria-label="Close settings">×</button></div>
+    <p class="settings-intro muted">Choose your map appearance and manage the sources in your news desk.</p>
+    <div class="settings-scroll"><section class="map-settings"><h3>Map appearance</h3><label for="map-style-choice">Preferred map</label><select id="map-style-choice"><option value="stardock">StarDock-style overview — default</option><option value="detailed">Detailed map</option></select><p class="muted">Overview uses subdued theme colors, rivers, borders, and city labels. Detailed adds roads, buildings, and closer inspection. Both use online map data.</p></section><h3 class="settings-sources-title">News sources</h3><div class="opml-actions"><button id="import-opml">Import OPML</button><button id="export-opml">Export OPML</button><input id="opml-file" type="file" accept=".opml,.xml,text/xml,application/xml" hidden></div><div id="settings-sources"></div>
     <section class="add-feed"><h3>Add a feed</h3><form id="add-feed-form"><label>Name<input id="new-feed-name" placeholder="Source name" maxlength="120" required></label><label>RSS or Atom URL<input id="new-feed-url" type="url" placeholder="https://example.org/feed.xml" maxlength="4000" required></label><button type="submit">Add to list</button></form></section>
     <p id="settings-status" role="status"></p>
     </div>
