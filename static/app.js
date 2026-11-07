@@ -35,6 +35,10 @@ function empty(title, message) { const box = make('div', undefined, 'empty'); bo
 
 const workspace=readStore('news-osint.workspace',{});
 state.mapMode=mapMode(readStore('news-osint.map-style',null));
+const markerOptions=readStore('news-osint.marker-options',{});
+state.markerStyle=['auto','dot','pin','crosshair'].includes(markerOptions?.style)?markerOptions.style:'auto';
+state.markerSize=['small','medium','large'].includes(markerOptions?.size)?markerOptions.size:'medium';
+state.activeMarkerId=null;
 state.restoringWorkspace=true;
 state.bookmarks=readStore('news-osint.bookmarks',{});state.view=workspace.view==='saved'?'saved':'news';
 state.reference=workspace.reference||null;
@@ -121,6 +125,8 @@ async function openSettings() {
   try {
     const data=await get('/api/sources');state.sourceDraft=data.sources.map(s=>({...s}));renderSettingsSources();
     $('map-style-choice').value=state.mapMode;
+    $('marker-style-choice').value=state.markerStyle;
+    $('marker-size-choice').value=state.markerSize;
     $('settings-status').textContent='';$('add-feed-form').reset();$('settings-dialog').showModal();
   } catch(error){toast(error.message);}
   finally{$('settings-open').disabled=false;}
@@ -136,6 +142,8 @@ async function saveSettings() {
     for(const source of data.sources)if(source.enabled&&!previous.has(source.id))selected.add(source.id);
     renderSourceFilters(data.sources,selected);writeStore('news-osint.known-sources',data.sources.map(s=>s.id));
     applyMapMode($('map-style-choice').value);
+    state.markerStyle=$('marker-style-choice').value;state.markerSize=$('marker-size-choice').value;
+    writeStore('news-osint.marker-options',{style:state.markerStyle,size:state.markerSize});updateMarkerAppearance();
     $('settings-dialog').close();toast('Settings saved.');if(sourcesChanged)loadNews();
   } catch(error){$('settings-status').textContent=error.message;}
   finally{$('settings-save').disabled=false;}
@@ -338,16 +346,29 @@ async function searchWikipedia() {
   finally { if(request===state.wikiRequest) results.setAttribute('aria-busy','false'); }
 }
 
+function updateMarkerAppearance() {
+  const entries=[...state.markers,...(state.placeMarker?[{id:null,marker:state.placeMarker}]:[])];
+  for(const {id,marker} of entries){
+    const element=marker.getElement();const active=id===state.activeMarkerId;
+    element.dataset.shape=state.markerStyle==='auto'?(active?'pin':'dot'):state.markerStyle;
+    element.dataset.size=state.markerSize;element.classList.toggle('is-active',active);
+    element.setAttribute('aria-pressed',String(active));
+  }
+}
+
 function addMarker(place, item = null) {
   if (!state.map) return;
   if (!item && state.placeMarker) state.placeMarker.remove();
   if (item) { const previous = state.markers.find(m => m.id === item.id); if (previous) previous.marker.remove(); state.markers = state.markers.filter(m => m.id !== item.id); }
   const element = make('button', undefined, 'map-pin'); element.type = 'button'; element.setAttribute('aria-label', item ? item.title : place.title);
+  element.title=item?`${place.title}: ${item.title}`:place.title;
+  const glyph=make('span',undefined,'map-pin-glyph');glyph.setAttribute('aria-hidden','true');element.append(glyph);
   const content = make('div'); content.append(make('strong', place.title));
   if (item) { content.append(make('p', item.title), articleLink('Read story ↗', item.url), make('p', 'Manually linked location')); }
   const marker = new maplibregl.Marker({element}).setLngLat([place.lon, place.lat]).setPopup(new maplibregl.Popup({offset:12}).setDOMContent(content)).addTo(state.map);
-  element.addEventListener('click', () => { if (item) { state.selected = item.id; renderStories(); document.querySelector(`[data-id="${item.id}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'}); } });
+  element.addEventListener('click', () => { state.activeMarkerId=item?.id??null;updateMarkerAppearance();if (item) { state.selected = item.id; renderStories(); document.querySelector(`[data-id="${item.id}"]`)?.scrollIntoView({block:'nearest',behavior:'smooth'}); } });
   if (item) state.markers.push({id:item.id, marker}); else state.placeMarker = marker;
+  updateMarkerAppearance();
 }
 
 function syncMarkers() {
@@ -364,6 +385,8 @@ async function choosePlace(place, item = null) {
   state.place = place; state.pendingStory = null; $('place-query').value = place.title; $('place-results').replaceChildren();
   $('coordinates').textContent = `${Number(place.lat).toFixed(3)}°, ${Number(place.lon).toFixed(3)}°`;
   if (state.map) { state.map.resize(); state.map.flyTo({center:[place.lon,place.lat], zoom:place.title.includes(',') && !place.pageid ? 10 : 8, essential:false}); }
+  state.activeMarkerId=item?.id??null;
+  if(item&&state.placeMarker){state.placeMarker.remove();state.placeMarker=null;}
   addMarker(place, item);
   if (item) { const locations = readStore('news-osint.locations', {}); locations[item.id] = place; writeStore('news-osint.locations', locations);if(state.bookmarks[item.id]){state.bookmarks[item.id].location={...place};saveBookmarks();}renderStories(); }
   saveWorkspace();
