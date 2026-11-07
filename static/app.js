@@ -498,6 +498,7 @@ async function loadTheme() {
     const theme = await get('/api/theme');
     if (JSON.stringify(theme) === JSON.stringify(state.theme)) return;
     state.theme = theme;
+    $('theme-name').textContent=theme.name||'Default';
     const keys = {background:'bg',dark_background:'panel',foreground:'fg',muted:'muted',accent:'accent',selection:'line',lighter_background:'raised',blue:'blue',green:'good',red:'bad'};
     for (const [key, css] of Object.entries(keys)) document.documentElement.style.setProperty('--' + css, theme[key]);
     const rgb = theme.background.slice(1).match(/../g).map(x => parseInt(x,16));
@@ -614,6 +615,7 @@ window.addEventListener('beforeunload',saveWorkspace);
 window.addEventListener('offline',()=>{$('connection-status').textContent='Offline · cached coverage available';});
 window.addEventListener('online',()=>{$('connection-status').textContent='Connection restored · refresh to check sources';});
 $('refresh').value = String(readStore('news-osint.refresh', 0)); $('refresh').dispatchEvent(new Event('change'));
+get('/api/health').then(data=>{$('app-version').textContent=data.version;}).catch(()=>{$('app-version').textContent='unavailable';});
 loadTheme().then(initMap); setInterval(loadTheme, 3000);
 loadSources().then(()=>loadNews({background:true})).catch(error=>{if(state.view==='saved')renderStories();else $('stories').replaceChildren(empty('Could not load source settings.',error.message));$('stories').setAttribute('aria-busy','false');});
 (async()=>{try{if(workspace.reference)await showReference(workspace.reference.pageid,workspace.reference.title,workspace.reference.context,workspace.reference.topic);}finally{state.restoringWorkspace=false;saveWorkspace();}})();

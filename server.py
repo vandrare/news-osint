@@ -23,7 +23,8 @@ from html.parser import HTMLParser
 
 ROOT = Path(__file__).resolve().parent
 STATE = Path(os.environ.get('NEWS_OSINT_STATE', Path.home() / '.local/state/news-osint'))
-UA = 'News-OSINT/0.1 (personal local desktop news reader)'
+VERSION = '0.1'
+UA = f'News-OSINT/{VERSION} (personal local desktop news reader)'
 FEEDS = {
     'google': ('Google News', 'https://news.google.com/rss?hl=en-US&gl=US&ceid=US%3Aen'),
     'bbc': ('BBC World', 'https://feeds.bbci.co.uk/news/world/rss.xml'),
@@ -533,10 +534,14 @@ def theme():
             data = tomllib.loads(path.read_text())
             colors = {key: value for key, value in data.items()
                       if isinstance(value, str) and re.fullmatch(r'#[0-9a-fA-F]{6}', value)}
-            return {**FALLBACK, **colors}
+            try:
+                name = (path.parent.parent / 'theme.name').read_text().strip()
+            except OSError:
+                name = path.parent.resolve().name if path.parent.is_symlink() else ''
+            return {**FALLBACK, **colors, 'name': name or 'Custom'}
         except (OSError, ValueError):
             pass
-    return FALLBACK
+    return {**FALLBACK, 'name': 'Default'}
 
 
 def article_url(value):
@@ -606,7 +611,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(403)
             return
         try:
-            routes = {'/api/health': lambda: {'app': 'news-osint', 'version': '0.1'},
+            routes = {'/api/health': lambda: {'app': 'news-osint', 'version': VERSION},
                       '/api/theme': theme, '/api/news': lambda: news(params),
                       '/api/sources': lambda: {'sources': sources()},
                       '/api/places': lambda: places(params.get('q', '')),

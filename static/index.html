@@ -10,11 +10,11 @@
 <body>
   <header class="app-header">
     <div class="brand"><img src="icon.svg" alt=""><div><strong>NEWS<span>—</span>OSINT</strong><small>OPEN SOURCE · LOCAL DESK</small></div></div>
-    <div class="header-actions"><span class="theme-badge"><i></i> Omarchy theme</span><button id="saved-view">Saved</button><button id="research-open">Research</button><button id="settings-open">Settings</button><button id="toggle-left">Filters</button><button id="toggle-right">Map</button><button id="reset-layout" title="Restore 25 / 50 / 25 layout">Reset layout</button><button id="export">Export CSV</button></div>
+    <div class="header-actions"><button id="saved-view">Saved</button><button id="research-open">Research</button><button id="settings-open">Settings</button><button id="toggle-left">Filters</button><button id="toggle-right">Map</button><button id="reset-layout" title="Restore 25 / 50 / 25 layout">Reset layout</button><button id="export">Export CSV</button></div>
   </header>
   <main id="workspace">
     <aside id="left" class="panel filters">
-      <div class="section-heading"><span class="eyebrow">01 / DISCOVER</span><h1>Your news desk.</h1><p>Follow the story. Find the context.</p></div>
+      <div class="section-heading"><span class="eyebrow">01 / DISCOVER</span><h1>News Desk</h1><p>Follow the story. Find the context.</p></div>
       <div class="search-tabs" role="tablist" aria-label="Search type"><button id="tab-news" role="tab" aria-selected="true" aria-controls="news-controls">News</button><button id="tab-wikipedia" role="tab" aria-selected="false" aria-controls="wiki-controls" tabindex="-1">Wikipedia</button></div>
       <div id="news-controls" role="tabpanel" aria-labelledby="tab-news">
       <form id="search-form">
@@ -54,7 +54,7 @@
       <div id="location-info" class="location-info"><span class="eyebrow">PLACE CONTEXT</span><h2>A little perspective.</h2><p class="muted">Find a city or region to explore its background, population, and country. You can also enter latitude, longitude.</p><p class="muted">Story locations are added manually using “Locate” so a mentioned place is never presented as a verified event location.</p></div>
     </aside>
   </main>
-  <footer class="app-footer"><span><i></i> LOCAL WORKSPACE</span><span id="footer-status">Ready</span><span id="connection-status">News-OSINT / 0.1</span></footer>
+  <footer class="app-footer"><div class="footer-left"><span>LOCAL WORKSPACE</span><span aria-hidden="true"> | </span><span id="connection-status" role="status">Checking coverage…</span></div><div class="footer-right"><span>© Scott Fors 2026 | version <span id="app-version">…</span></span><span class="footer-theme"><i aria-hidden="true"></i><span id="theme-name">Default</span></span></div><span id="footer-status" class="sr-only" role="status">Ready</span></footer>
   <div id="toast" role="status" hidden></div>
   <div id="selection-tools" role="toolbar" aria-label="Research selected text" hidden><span id="selection-label"></span><div><button id="selection-wikipedia">Wikipedia</button><button id="selection-map">Find on map</button><button id="selection-news">Search news</button><button id="selection-research">Research</button></div></div>
   <dialog id="settings-dialog" aria-labelledby="settings-title">

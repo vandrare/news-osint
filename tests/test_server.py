@@ -21,6 +21,20 @@ class NewsTests(unittest.TestCase):
         self.state_patch.stop()
         self.state_dir.cleanup()
 
+    def test_theme_includes_current_name_and_fallback(self):
+        with tempfile.TemporaryDirectory() as folder, patch.object(Path, 'home', return_value=Path(folder)):
+            self.assertEqual(server.theme()['name'], 'Default')
+            current = Path(folder) / '.local/state/omarchy/current'
+            (current / 'theme').mkdir(parents=True)
+            (current / 'theme/colors.toml').write_text('background = "#123456"')
+            (current / 'theme.name').write_text('Sirenis\n')
+            result = server.theme()
+            self.assertEqual(result['name'], 'Sirenis')
+            self.assertEqual(result['background'], '#123456')
+            self.assertEqual(result['accent'], server.FALLBACK['accent'])
+            (current / 'theme.name').unlink()
+            self.assertEqual(server.theme()['name'], 'Custom')
+
     def test_query_phrases_alternatives_and_exclusions(self):
         match = server.compile_query('"power outage" -planned OR earthquake')
         self.assertTrue(match('A POWER OUTAGE in Lyon'))
