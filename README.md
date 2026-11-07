@@ -72,7 +72,7 @@ feeds; app-specific identifiers preserve the Google News behavior on reimport.
 
 Choose a map and **Save changes** to apply it; **Cancel** keeps the current map.
 Switching retains the map position, zoom, story markers, and location searches.
-Settings also offers dots, pins, or crosshairs in three sizes. By default, linked
+Settings also offers dots, pins, or crosshairs in four sizes, from extra small to large. By default, linked
 locations use themed dots and the selected location uses a larger pin. Marker
 preferences are saved locally and apply to both map appearances.
 The preference is saved in the app's local browser profile. Map-only changes

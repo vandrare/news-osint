@@ -25,7 +25,7 @@ textarea{font:inherit;width:100%;background:var(--bg);color:var(--fg);border:1px
 
 .marker-settings{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:18px}.marker-settings select{display:block;margin-top:8px}
 #map .map-pin{--marker-scale:1;width:30px;height:30px;padding:0;background:transparent;border:0;border-radius:50%;box-shadow:none;color:var(--accent);display:grid;place-items:center;overflow:visible;cursor:pointer;z-index:1}
-#map .map-pin[data-size=small]{--marker-scale:.8}#map .map-pin[data-size=large]{--marker-scale:1.3}#map .map-pin.is-active{z-index:2}#map .map-pin:focus-visible{outline:2px solid var(--accent);outline-offset:4px}#map .map-pin:hover{color:var(--fg)}
+#map .map-pin[data-size=extra-small]{--marker-scale:.6}#map .map-pin[data-size=small]{--marker-scale:.8}#map .map-pin[data-size=large]{--marker-scale:1.3}#map .map-pin.is-active{z-index:2}#map .map-pin:focus-visible{outline:2px solid var(--accent);outline-offset:4px}#map .map-pin:hover{color:var(--fg)}
 .map-pin-glyph{display:block;pointer-events:auto;background:currentColor;filter:drop-shadow(0 1px 2px var(--bg))}
 .map-pin[data-shape=dot] .map-pin-glyph{width:calc(10px * var(--marker-scale));height:calc(10px * var(--marker-scale));border:2px solid var(--panel);border-radius:50%;box-shadow:0 0 0 1px currentColor}
 .map-pin.is-active[data-shape=dot] .map-pin-glyph{width:calc(15px * var(--marker-scale));height:calc(15px * var(--marker-scale))}

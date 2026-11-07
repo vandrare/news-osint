@@ -37,7 +37,7 @@ const workspace=readStore('news-osint.workspace',{});
 state.mapMode=mapMode(readStore('news-osint.map-style',null));
 const markerOptions=readStore('news-osint.marker-options',{});
 state.markerStyle=['auto','dot','pin','crosshair'].includes(markerOptions?.style)?markerOptions.style:'auto';
-state.markerSize=['small','medium','large'].includes(markerOptions?.size)?markerOptions.size:'medium';
+state.markerSize=['extra-small','small','medium','large'].includes(markerOptions?.size)?markerOptions.size:'medium';
 state.activeMarkerId=null;
 state.restoringWorkspace=true;
 state.bookmarks=readStore('news-osint.bookmarks',{});state.view=workspace.view==='saved'?'saved':'news';
