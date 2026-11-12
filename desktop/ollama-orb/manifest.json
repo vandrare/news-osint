@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "local.news-osint.ollama-orb",
   "name": "News-OSINT Ollama Orb",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Scott Fors; mesh by macd2",
   "license": "MIT",
-  "description": "Rotating 300px Earth, inset 100px from the bottom-right, visible during News-OSINT Ollama inference.",
+  "description": "Themed rotating 300px wireframe Earth, inset 100px from the bottom-right, visible during News-OSINT Ollama inference.",
   "kinds": [
     "panel"
   ],

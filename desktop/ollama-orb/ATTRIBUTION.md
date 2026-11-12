@@ -10,9 +10,9 @@ projected into a 1024 × 512 equirectangular white-land / black-water mask.
 - Downloaded: 2026-11-12.
 - Source SHA-256: `9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9`.
 
-The globe's terrain colors, shading, atmospheric rim and rotation are rendered
-locally by the included shader. These are decorative and do not represent live
-satellite imagery, cloud cover, weather or current seasons.
+The shader extracts continent outlines from this mask and adds a rotating
+latitude/longitude wireframe. All line colors come from the active Omarchy theme.
+The globe does not represent live satellite imagery, cloud cover or weather.
 
 The original orb lifecycle integration was adapted from macd2/OmarchyAgentOrb;
 its MIT license and copyright notice are retained in LICENSE and Main.qml.

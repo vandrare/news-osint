@@ -88,6 +88,9 @@ PanelWindow {
     ShaderEffect {
       anchors.fill: parent
       property var landTexture: landMap
+      property color accentColor: Color.accent
+      property color foregroundColor: Color.foreground
+      property color mutedColor: Color.muted
       // One full revolution per minute; continue smoothly between requests.
       property real phase: panel.clock * 2 * Math.PI / 60 + 0.22
       fragmentShader: "shaders/earth.frag.qsb"
