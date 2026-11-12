@@ -248,7 +248,10 @@ UK, European/EU, international/geopolitics, nonpolitical, or **Custom context**.
 Local US analysis focuses on local policy framing rather than assuming national
 party affiliation. Custom context supports other countries and regional contexts;
 existing saved context text is retained. The last context used for analysis is
-remembered. Then use **Analyze text**. Results contain a summary,
+remembered. Choose **Quick** (default) for up to two short summary points, claims, and
+supporting quotations, or **Detailed** for a fuller report. The selected mode is
+remembered and recorded in the report/PDF. Both modes analyze the same supplied
+text and use the same uncertainty and quotation checks. Then use **Analyze text**. Results contain a summary,
 claims made by the text, apparent leaning and rationale, supporting quotations,
 and limitations. Quotations must match supplied text (ignoring whitespace), or
 they are removed. RSS excerpts cannot receive a definitive leaning label, and
@@ -257,9 +260,14 @@ quotation presence, not the model's interpretation. It is experimental framing
 analysis, not a fact check, publisher rating, or calibrated confidence score.
 
 Analysis runs only on demand, one generation at a time, with a four-minute request
-timeout. Closing the panel lets the request finish; click Analyze to reopen it.
+timeout. Live progress shows model checking/loading, response generation,
+quotation validation, elapsed time, and received response characters. These are
+observed stages rather than a completion percentage; partial model output is not
+displayed as validated analysis. The model stays loaded for 15 idle minutes after
+a generation to reduce reload delays. Thinking remains off and the context
+window stays at 12,288 tokens in both modes. Closing the panel lets the request finish; click Analyze to reopen it.
 Exact results are cached locally for 30 days, keyed by source text, title, political
-context, model digest, source type, and analysis version. Article downloads still
+context, model digest, source type, Quick/Detailed mode, and analysis version. Article downloads still
 contact the publisher; inference is sent only to the local Ollama service.
 Cached analysis contains generated summaries and quoted passages in the app's
 existing cache directory. Model selection and political context are saved in the

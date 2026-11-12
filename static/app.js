@@ -70,6 +70,16 @@ async function aiRequest(path,data){
   const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-News-OSINT':'ai'},body:JSON.stringify(data)});
   const result=await response.json();if(!response.ok)throw new Error(result.error||'Local AI request failed.');return result;
 }
+async function streamAnalysis(data,onProgress){
+  const response=await fetch('/api/ai/analyze-stream',{method:'POST',headers:{'Content-Type':'application/json','X-News-OSINT':'ai'},body:JSON.stringify(data)});
+  if(!response.ok){let message='Analysis could not start. Refresh the app and try again.';try{message=(await response.json()).error||message;}catch{}throw new Error(message);}
+  const reader=response.body.getReader(),decoder=new TextDecoder();let buffer='',result=null;
+  function consume(line){if(!line.trim())return;const event=JSON.parse(line);if(event.type==='error')throw new Error(event.error);if(event.type==='result')result=event.data;else onProgress(event);}
+  try{while(true){const {done,value}=await reader.read();buffer+=done?decoder.decode():decoder.decode(value,{stream:true});let boundary;
+    while((boundary=buffer.indexOf('\n'))!==-1){consume(buffer.slice(0,boundary));buffer=buffer.slice(boundary+1);}if(done)break;
+  }if(buffer.trim())consume(buffer);if(!result)throw new Error('The analysis connection ended before a result arrived. Try again.');return result;}
+  finally{reader.releaseLock();}
+}
 function invalidateAnalysis(){ state.analysisReport=null;$('analysis-export').hidden=true;$('analysis-results').replaceChildren();$('analysis-status').textContent=''; }
 function analysisTextChanged(){
   $('analysis-count').textContent=`${$('analysis-text').value.length.toLocaleString()} / 20,000 characters · minimum 200`;
@@ -93,11 +103,12 @@ function openAnalysis(item){
   $('analysis-url').value=item.url;updateAnalysisSourceLink();
   hideSelectionTools();$('analysis-story-title').textContent=item.title;$('analysis-results').replaceChildren();$('analysis-status').textContent='';
   $('analysis-model').textContent='Local model: '+(state.aiModel||'Select one in Local AI settings');
+  $('analysis-mode').value=readStore('news-osint.ai-mode','quick')==='detailed'?'detailed':'quick';
   restorePoliticalContext(readStore('news-osint.ai-context',politicalContexts.auto));useRSS();$('analysis-dialog').showModal();
 }
 function renderAnalysis(data){
   const out=$('analysis-results');out.replaceChildren();
-  out.append(make('p',`${data.model} · ${data.kind==='rss'?'RSS excerpt':data.kind==='extracted'?'Extracted page text':'Pasted / edited text'} · ${data.characters.toLocaleString()} characters · ${new Date(data.analyzedAt*1000).toLocaleString()} · generated in ${data.seconds}s`,'analysis-meta'));
+  out.append(make('p',`${data.model} · ${data.mode==='quick'?'Quick':'Detailed'} · ${data.kind==='rss'?'RSS excerpt':data.kind==='extracted'?'Extracted page text':'Pasted / edited text'} · ${data.characters.toLocaleString()} characters · ${new Date(data.analyzedAt*1000).toLocaleString()} · generated in ${data.seconds}s`,'analysis-meta'));
   function list(title,items){out.append(make('h3',title));const ul=make('ul');for(const text of items)ul.append(make('li',text));out.append(ul);}
   list('Summary',data.summary);list('Claims made by the text — unverified',data.claims);
   out.append(make('h3','Apparent leaning: '+data.leaning),make('p','Context: '+data.context),make('p',data.rationale));
@@ -141,6 +152,7 @@ $('analysis-paste').addEventListener('click',async()=>{
   }catch(error){if(token===state.analysisToken)$('analysis-source-note').textContent=error.name==='NotAllowedError'?'Clipboard access was blocked. Click the text box and press Ctrl+V to paste.':error.message;}
   $('analysis-text').focus();
 });
+$('analysis-mode').addEventListener('change',invalidateAnalysis);
 $('analysis-kind').addEventListener('change',invalidateAnalysis);
 $('analysis-context').addEventListener('change',()=>{$('analysis-custom-context').hidden=$('analysis-context').value!=='custom';invalidateAnalysis();});
 $('analysis-context-custom').addEventListener('input',invalidateAnalysis);
@@ -158,9 +170,15 @@ $('analysis-run').addEventListener('click',async()=>{
   if(!context){$('analysis-status').textContent='Enter the political context for the assessment.';return;}
   invalidateAnalysis();state.analysisBusy=true;$('analysis-status').textContent='Analyzing locally… This can take a few minutes. Closing the panel lets it continue; reopen Analyze to see progress.';
   const controls=[...document.querySelectorAll('.analysis-inputs button,.analysis-inputs input,.analysis-inputs textarea,.analysis-inputs select')];controls.forEach(el=>el.disabled=true);
-  writeStore('news-osint.ai-context',context);
-  try{const data=await aiRequest('/api/ai/analyze',{model:state.aiModel,title:state.analysisItem.title,text,kind:$('analysis-kind').value,context});renderAnalysis(data);$('analysis-status').textContent='Analysis ready. Matching requests reuse saved results for up to 30 days.';}
-  catch(error){$('analysis-status').textContent=error.message;}finally{state.analysisBusy=false;controls.forEach(el=>el.disabled=false);$('analysis-rss').disabled=!(state.analysisItem.summary||'').trim();}
+  const mode=$('analysis-mode').value;writeStore('news-osint.ai-context',context);writeStore('news-osint.ai-mode',mode);
+  const started=Date.now();let progress={stage:'checking',characters:0};
+  function showProgress(){const seconds=Math.floor((Date.now()-started)/1000),labels={checking:'Checking local model / saved results',loading:'Loading model / reading article',generating:'Generating analysis',validating:'Checking supporting quotations'};
+    $('analysis-status').textContent=`${labels[progress.stage]||'Analyzing locally'} · ${seconds}s elapsed`+(progress.characters?` · ${progress.characters.toLocaleString()} response characters received`:'')+'. You can close and reopen this panel while it runs.';
+  }
+  showProgress();const ticker=setInterval(showProgress,1000);
+  try{const data=await streamAnalysis({model:state.aiModel,title:state.analysisItem.title,text,kind:$('analysis-kind').value,context,mode},event=>{progress=event;showProgress();});clearInterval(ticker);renderAnalysis(data);$('analysis-status').textContent=data.cached?'Loaded saved analysis.':`Analysis ready in ${data.seconds}s. Matching requests reuse saved results for up to 30 days.`;}
+
+  catch(error){$('analysis-status').textContent=error.message;}finally{clearInterval(ticker);state.analysisBusy=false;controls.forEach(el=>el.disabled=false);$('analysis-rss').disabled=!(state.analysisItem.summary||'').trim();}
 });
 
 const workspace=readStore('news-osint.workspace',{});

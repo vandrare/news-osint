@@ -1,5 +1,6 @@
 """Local-only Ollama analysis and best-effort public article extraction."""
 import hashlib
+import copy
 from html.parser import HTMLParser
 import ipaddress
 import json
@@ -13,7 +14,7 @@ import urllib.request
 
 OLLAMA = 'http://127.0.0.1:11434'
 MAX_TEXT = 20000
-PROMPT_VERSION = 1
+PROMPT_VERSION = 2
 BUSY = threading.Lock()
 # Never inherit a proxy configuration for local model traffic.
 LOCAL = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -32,6 +33,44 @@ def ollama(path, payload=None, timeout=5):
         raise ValueError('Ollama rejected the request. Check that the selected model is installed and supports structured output.') from exc
     except (OSError, urllib.error.URLError) as exc:
         raise ValueError('Ollama is unavailable or timed out. Check the local service and try again.') from exc
+
+
+def stream_chat(payload, progress):
+    request = urllib.request.Request(OLLAMA + '/api/chat', data=json.dumps({**payload, 'stream': True}).encode(),
+                                     headers={'Content-Type': 'application/json'})
+    content, size, last_update, started, final = [], 0, 0, time.monotonic(), None
+    progress({'stage': 'loading', 'characters': 0})
+    try:
+        with LOCAL.open(request, timeout=240) as response:
+            for line in response:
+                if time.monotonic() - started > 240:
+                    raise ValueError('Analysis timed out. Try Quick mode or shorter text.')
+                if not line.strip():
+                    continue
+                chunk = json.loads(line)
+                if chunk.get('error'):
+                    raise ValueError('Ollama could not complete the analysis. Try again or select another model.')
+                piece = chunk.get('message', {}).get('content', '')
+                content.append(piece)
+                size += len(piece)
+                if size > 100000:
+                    raise ValueError('The model response was too large.')
+                now = time.monotonic()
+                if piece and (now - last_update >= .3 or chunk.get('done')):
+                    progress({'stage': 'generating', 'characters': size})
+                    last_update = now
+                if chunk.get('done'):
+                    final = chunk
+                    break
+    except urllib.error.HTTPError as exc:
+        raise ValueError('Ollama rejected the analysis request. Check the selected model.') from exc
+    except (OSError, urllib.error.URLError) as exc:
+        raise ValueError('Ollama is unavailable or timed out. Check the local service and try again.') from exc
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise ValueError('Ollama returned an invalid progress stream. Try again.') from exc
+    if final is None:
+        raise ValueError('Ollama stopped before completing the analysis. Try again.')
+    return {**final, 'message': {'content': ''.join(content)}}
 
 
 def models():
@@ -243,7 +282,12 @@ def clean_result(value, text, kind):
     return result
 
 
-def analyze(data, cache):
+def analyze(data, cache, progress=None):
+    emit = progress or (lambda value: None)
+    emit({'stage': 'checking', 'characters': 0})
+    mode = data.get('mode', 'detailed')
+    if mode not in ('quick', 'detailed'):
+        raise ValueError('Choose Quick or Detailed analysis.')
     model = data.get('model')
     if not isinstance(model, str) or len(model) > 200:
         raise ValueError('Select an installed local model in Settings → Local AI.')
@@ -259,28 +303,42 @@ def analyze(data, cache):
     title = data.get('title', '')
     if not isinstance(title, str) or len(title) > 1000:
         raise ValueError('Invalid article title.')
-    material = {'title': title, 'text': text, 'kind': kind, 'context': context.strip()}
+    material = {'title': title, 'text': text, 'kind': kind, 'context': context.strip(), 'mode': mode}
     fingerprint = hashlib.sha256(json.dumps([PROMPT_VERSION, installed, material], sort_keys=True).encode()).hexdigest()
+    generated = False
     def generate():
+        nonlocal generated
+        generated = True
         if not BUSY.acquire(blocking=False):
             raise ValueError('Another article is being analyzed. Wait for it to finish, then try again.')
         try:
             start = time.monotonic()
-            response = ollama('/api/chat', {'model': model, 'messages': [
-                {'role': 'system', 'content': SYSTEM + '\nSchema: ' + json.dumps(SCHEMA)},
-                {'role': 'user', 'content': json.dumps(material)}], 'format': SCHEMA,
-                'stream': False, 'think': False, 'keep_alive': '2m',
-                'options': {'temperature': 0, 'num_ctx': 12288, 'num_predict': 1800}}, timeout=240)
+            schema = copy.deepcopy(SCHEMA)
+            brief = ''
+            if mode == 'quick':
+                for field in ('summary', 'claims', 'evidence', 'limitations'):
+                    schema['properties'][field]['maxItems'] = 2
+                brief = ('\nQUICK MODE: Override the earlier length targets. Keep the entire response under 180 words, '
+                         'including quotations. Use 1–2 short summary points, at most 2 claims, '
+                         '1–2 short quotations with brief explanations when supported, '
+                         'a one-sentence rationale and 1–2 limitations. Preserve uncertainty and evidence rules.')
+            payload = {'model': model, 'messages': [
+                {'role': 'system', 'content': SYSTEM + brief + '\nSchema: ' + json.dumps(schema)},
+                {'role': 'user', 'content': json.dumps(material)}], 'format': schema,
+                'stream': False, 'think': False, 'keep_alive': '15m',
+                'options': {'temperature': 0, 'num_ctx': 12288, 'num_predict': 1100 if mode == 'quick' else 1800}}
+            response = stream_chat(payload, emit) if progress else ollama('/api/chat', payload, timeout=240)
             if response.get('done_reason') == 'length':
                 raise ValueError('The model ran out of output space. Try shorter text or another model.')
             try:
                 value = json.loads(response['message']['content'])
             except (KeyError, TypeError, json.JSONDecodeError) as exc:
                 raise ValueError('The model did not return usable structured analysis. Try again.') from exc
+            emit({'stage': 'validating', 'characters': len(response['message']['content'])})
             return {**clean_result(value, text, kind), 'model': model, 'digest': installed['digest'],
-                    'kind': kind, 'context': context.strip(), 'characters': len(text),
+                    'kind': kind, 'mode': mode, 'context': context.strip(), 'characters': len(text),
                     'analyzedAt': time.time(), 'seconds': round(time.monotonic() - start, 1)}
         finally:
             BUSY.release()
-    value, _ = cache('local-ai:v1:' + fingerprint, 86400 * 30, generate)
-    return value
+    value, _ = cache('local-ai:v2:' + fingerprint, 86400 * 30, generate)
+    return {**value, 'cached': not generated}

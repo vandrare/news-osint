@@ -1,4 +1,5 @@
 import json
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -108,6 +109,46 @@ class LocalAITests(unittest.TestCase):
             with patch.object(local_ai, 'ollama', return_value={'message': {'content': json.dumps(self.example())}}):
                 self.assertEqual(local_ai.analyze(data, uncached)['leaning'], 'left')
 
+    def test_streaming_collects_json_and_rejects_incomplete_stream(self):
+        text = json.dumps(self.example())
+        chunks = [dict(message={'content': text[:30]}, done=False),
+                  dict(message={'content': text[30:]}, done=False),
+                  dict(message={'content': ''}, done=True, done_reason='stop')]
+        response = io.BytesIO(b''.join(json.dumps(x).encode() + b'\n' for x in chunks))
+        events = []
+        with patch.object(local_ai.LOCAL, 'open', return_value=response) as call:
+            result = local_ai.stream_chat({'model': 'qwen3:4b'}, events.append)
+        self.assertEqual(result['message']['content'], text)
+        self.assertEqual(events[0]['stage'], 'loading')
+        self.assertTrue(any(e['stage'] == 'generating' for e in events))
+        self.assertTrue(json.loads(call.call_args.args[0].data)['stream'])
+        with patch.object(local_ai.LOCAL, 'open', return_value=io.BytesIO(b'{"done":false}\n')):
+            with self.assertRaisesRegex(ValueError, 'before completing'):
+                local_ai.stream_chat({}, lambda e: None)
+
+    def test_quick_profile_and_cache_are_distinct_from_detailed(self):
+        data = dict(model='qwen3:4b', text='They called it a disastrous policy. ' * 15,
+                    title='Policy debate', kind='pasted', context='UK politics')
+        installed = {'models': [{'name': 'qwen3:4b', 'digest': 'one', 'size': 100}]}
+        output = {'message': {'content': json.dumps(self.example())}, 'done_reason': 'stop'}
+        with tempfile.TemporaryDirectory() as folder, patch.object(server, 'STATE', Path(folder)), \
+                patch.object(local_ai, 'models', return_value=installed), patch.object(local_ai, 'stream_chat', return_value=output) as call:
+            detailed = local_ai.analyze({**data, 'mode': 'detailed'}, server.cached, lambda e: None)
+            quick = local_ai.analyze({**data, 'mode': 'quick'}, server.cached, lambda e: None)
+            self.assertEqual(call.call_count, 2)
+            self.assertEqual(quick['mode'], 'quick')
+            payload = call.call_args.args[0]
+            self.assertEqual(payload['keep_alive'], '15m')
+            self.assertFalse(payload['think'])
+            self.assertEqual(payload['options']['num_ctx'], 12288)
+            for field in ['summary', 'claims', 'evidence', 'limitations']:
+                self.assertEqual(payload['format']['properties'][field]['maxItems'], 2)
+            saved = local_ai.analyze({**data, 'mode': 'quick'}, server.cached, lambda e: None)
+            self.assertTrue(saved['cached'])
+            self.assertEqual(call.call_count, 2)
+            with self.assertRaisesRegex(ValueError, 'Quick or Detailed'):
+                local_ai.analyze({**data, 'mode': 'unknown'}, server.cached)
+
     def test_analysis_cache_and_model_digest_invalidation(self):
         data = dict(model='qwen3:4b', text='They called it a disastrous policy. ' * 15,
                     title='Policy debate', kind='pasted', context='UK politics')
@@ -116,7 +157,10 @@ class LocalAITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, patch.object(server, 'STATE', Path(folder)), \
                 patch.object(local_ai, 'models', return_value=installed), patch.object(local_ai, 'ollama', return_value=output) as call:
             first = local_ai.analyze(data, server.cached)
-            self.assertEqual(local_ai.analyze(data, server.cached), first)
+            second = local_ai.analyze(data, server.cached)
+            self.assertFalse(first['cached'])
+            self.assertTrue(second['cached'])
+            self.assertEqual(second, {**first, 'cached': True})
             self.assertEqual(call.call_count, 1)
             installed['models'][0]['digest'] = 'two'
             local_ai.analyze(data, server.cached)

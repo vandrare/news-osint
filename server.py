@@ -582,13 +582,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         host = self.headers.get('Host', '')
         settings = self.path in ('/api/sources', '/api/sources/test')
-        ai = self.path in ('/api/ai/analyze', '/api/ai/extract')
+        ai = self.path in ('/api/ai/analyze', '/api/ai/analyze-stream', '/api/ai/extract')
         if (host.split(':')[0] not in ('127.0.0.1', 'localhost')
                 or self.headers.get('Origin') != 'http://' + host
                 or self.headers.get('X-News-OSINT') != ('ai' if ai else 'settings' if settings else 'reader')):
             self.send_error(403)
             return
-        if self.path not in ('/api/reader', '/api/sources', '/api/sources/test', '/api/ai/analyze', '/api/ai/extract'):
+        if self.path not in ('/api/reader', '/api/sources', '/api/sources/test', '/api/ai/analyze', '/api/ai/analyze-stream', '/api/ai/extract'):
             self.send_error(404)
             return
         try:
@@ -598,6 +598,9 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError('Invalid request')
+            if self.path == '/api/ai/analyze-stream':
+                self.stream_analysis(data)
+                return
             actions = {
                 '/api/ai/analyze': lambda: local_ai.analyze(data, cached),
                 '/api/ai/extract': lambda: local_ai.extract(data.get('url')),
@@ -612,6 +615,30 @@ class Handler(BaseHTTPRequestHandler):
         except OSError:
             message = 'Local AI request failed. Check Ollama and try again.' if ai else 'Feed could not be fetched. Check the URL and connection.' if self.path == '/api/sources/test' else 'Feed settings could not be saved.' if settings else 'The article reader could not start. Use Open in browser instead.'
             self.respond(json.dumps({'error': message}).encode(), 'application/json', 503)
+
+    def stream_analysis(self, data):
+        self.send_response(200)
+        self.send_header('Content-Type', 'application/x-ndjson; charset=utf-8')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.end_headers()
+        connected = True
+        def emit(value):
+            nonlocal connected
+            if connected:
+                try:
+                    self.wfile.write(json.dumps(value).encode() + b'\n')
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    connected = False
+        try:
+            result = local_ai.analyze(data, cached, progress=emit)
+            emit({'type': 'result', 'data': result})
+        except (ValueError, OSError) as exc:
+            emit({'type': 'error', 'error': str(exc)})
+        except Exception as exc:
+            self.log_error('Local AI stream failed: %s', type(exc).__name__)
+            emit({'type': 'error', 'error': 'Analysis could not complete. Check Ollama and try again.'})
 
     def do_GET(self):
         parsed = urllib.parse.urlsplit(self.path)
