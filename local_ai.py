@@ -1,5 +1,7 @@
 """Local-only Ollama analysis and best-effort public article extraction."""
 import hashlib
+import contextlib
+from desktop_activity import ActivityPulse
 import copy
 from html.parser import HTMLParser
 import ipaddress
@@ -282,7 +284,7 @@ def clean_result(value, text, kind):
     return result
 
 
-def analyze(data, cache, progress=None):
+def analyze(data, cache, progress=None, activity_dir=None):
     emit = progress or (lambda value: None)
     emit({'stage': 'checking', 'characters': 0})
     mode = data.get('mode', 'detailed')
@@ -312,32 +314,38 @@ def analyze(data, cache, progress=None):
         if not BUSY.acquire(blocking=False):
             raise ValueError('Another article is being analyzed. Wait for it to finish, then try again.')
         try:
-            start = time.monotonic()
-            schema = copy.deepcopy(SCHEMA)
-            brief = ''
-            if mode == 'quick':
-                for field in ('summary', 'claims', 'evidence', 'limitations'):
-                    schema['properties'][field]['maxItems'] = 2
-                brief = ('\nQUICK MODE: Override the earlier length targets. Keep the entire response under 180 words, '
-                         'including quotations. Use 1–2 short summary points, at most 2 claims, '
-                         '1–2 short quotations with brief explanations when supported, '
-                         'a one-sentence rationale and 1–2 limitations. Preserve uncertainty and evidence rules.')
-            payload = {'model': model, 'messages': [
-                {'role': 'system', 'content': SYSTEM + brief + '\nSchema: ' + json.dumps(schema)},
-                {'role': 'user', 'content': json.dumps(material)}], 'format': schema,
-                'stream': False, 'think': False, 'keep_alive': '15m',
-                'options': {'temperature': 0, 'num_ctx': 12288, 'num_predict': 1100 if mode == 'quick' else 1800}}
-            response = stream_chat(payload, emit) if progress else ollama('/api/chat', payload, timeout=240)
-            if response.get('done_reason') == 'length':
-                raise ValueError('The model ran out of output space. Try shorter text or another model.')
-            try:
-                value = json.loads(response['message']['content'])
-            except (KeyError, TypeError, json.JSONDecodeError) as exc:
-                raise ValueError('The model did not return usable structured analysis. Try again.') from exc
-            emit({'stage': 'validating', 'characters': len(response['message']['content'])})
-            return {**clean_result(value, text, kind), 'model': model, 'digest': installed['digest'],
-                    'kind': kind, 'mode': mode, 'context': context.strip(), 'characters': len(text),
-                    'analyzedAt': time.time(), 'seconds': round(time.monotonic() - start, 1)}
+            activity = ActivityPulse(activity_dir, model, mode) if activity_dir else contextlib.nullcontext()
+            with activity as pulse:
+                def report_progress(event):
+                    if pulse:
+                        pulse.update(event)
+                    emit(event)
+                start = time.monotonic()
+                schema = copy.deepcopy(SCHEMA)
+                brief = ''
+                if mode == 'quick':
+                    for field in ('summary', 'claims', 'evidence', 'limitations'):
+                        schema['properties'][field]['maxItems'] = 2
+                    brief = ('\nQUICK MODE: Override the earlier length targets. Keep the entire response under 180 words, '
+                             'including quotations. Use 1–2 short summary points, at most 2 claims, '
+                             '1–2 short quotations with brief explanations when supported, '
+                             'a one-sentence rationale and 1–2 limitations. Preserve uncertainty and evidence rules.')
+                payload = {'model': model, 'messages': [
+                    {'role': 'system', 'content': SYSTEM + brief + '\nSchema: ' + json.dumps(schema)},
+                    {'role': 'user', 'content': json.dumps(material)}], 'format': schema,
+                    'stream': False, 'think': False, 'keep_alive': '15m',
+                    'options': {'temperature': 0, 'num_ctx': 12288, 'num_predict': 1100 if mode == 'quick' else 1800}}
+                response = stream_chat(payload, report_progress) if progress else ollama('/api/chat', payload, timeout=240)
+                if response.get('done_reason') == 'length':
+                    raise ValueError('The model ran out of output space. Try shorter text or another model.')
+                try:
+                    value = json.loads(response['message']['content'])
+                except (KeyError, TypeError, json.JSONDecodeError) as exc:
+                    raise ValueError('The model did not return usable structured analysis. Try again.') from exc
+                report_progress({'stage': 'validating', 'characters': len(response['message']['content'])})
+                return {**clean_result(value, text, kind), 'model': model, 'digest': installed['digest'],
+                        'kind': kind, 'mode': mode, 'context': context.strip(), 'characters': len(text),
+                        'analyzedAt': time.time(), 'seconds': round(time.monotonic() - start, 1)}
         finally:
             BUSY.release()
     value, _ = cache('local-ai:v2:' + fingerprint, 86400 * 30, generate)

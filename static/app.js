@@ -104,7 +104,10 @@ function openAnalysis(item){
   hideSelectionTools();$('analysis-story-title').textContent=item.title;$('analysis-results').replaceChildren();$('analysis-status').textContent='';
   $('analysis-model').textContent='Local model: '+(state.aiModel||'Select one in Local AI settings');
   $('analysis-mode').value=readStore('news-osint.ai-mode','quick')==='detailed'?'detailed':'quick';
-  restorePoliticalContext(readStore('news-osint.ai-context',politicalContexts.auto));useRSS();$('analysis-dialog').showModal();
+  restorePoliticalContext(readStore('news-osint.ai-context',politicalContexts.auto));
+  invalidateAnalysis();$('analysis-text').value='';$('analysis-kind').value='extracted';
+  $('analysis-rss').disabled=!(item.summary||'').trim();analysisTextChanged();
+  $('analysis-dialog').showModal();loadAnalysisText();
 }
 function renderAnalysis(data){
   const out=$('analysis-results');out.replaceChildren();
@@ -157,13 +160,15 @@ $('analysis-kind').addEventListener('change',invalidateAnalysis);
 $('analysis-context').addEventListener('change',()=>{$('analysis-custom-context').hidden=$('analysis-context').value!=='custom';invalidateAnalysis();});
 $('analysis-context-custom').addEventListener('input',invalidateAnalysis);
 $('analysis-text').addEventListener('input',()=>{invalidateAnalysis();$('analysis-kind').value='pasted';$('analysis-source-note').textContent='Edited or pasted text; check that it includes the article material you want assessed.';analysisTextChanged();});
-$('analysis-extract').addEventListener('click',async()=>{
-  const token=state.analysisToken,originalText=$('analysis-text').value;const button=$('analysis-extract');button.disabled=true;$('analysis-source-note').textContent='Fetching article text…';
-  try{const data=await aiRequest('/api/ai/extract',{url:$('analysis-url').value.trim()});if(token!==state.analysisToken)return;
+async function loadAnalysisText(){
+  const token=state.analysisToken,request=state.extractRequest=(state.extractRequest||0)+1,originalText=$('analysis-text').value;state.extracting=true;const button=$('analysis-extract');button.disabled=true;$('analysis-source-note').textContent='Fetching article text…';
+  try{const data=await aiRequest('/api/ai/extract',{url:$('analysis-url').value.trim()});if(token!==state.analysisToken||request!==state.extractRequest)return;
+    if(state.analysisBusy)return;
     if($('analysis-text').value!==originalText){$('analysis-source-note').textContent='Text changed while loading; your edits were kept. Load again to replace them.';return;}
     invalidateAnalysis();if(data.url){$('analysis-url').value=data.url;updateAnalysisSourceLink();}$('analysis-text').value=data.text;$('analysis-kind').value='extracted';$('analysis-source-note').textContent=data.notice+(data.truncated?' Truncated to 20,000 characters.':'');analysisTextChanged();
-  }catch(error){if(token===state.analysisToken)$('analysis-source-note').textContent=error.message;}finally{button.disabled=false;}
-});
+  }catch(error){if(token===state.analysisToken)$('analysis-source-note').textContent=error.message;}finally{if(request===state.extractRequest){state.extracting=false;button.disabled=!!state.analysisBusy;}}
+}
+$('analysis-extract').addEventListener('click',loadAnalysisText);
 $('analysis-run').addEventListener('click',async()=>{
   const text=$('analysis-text').value.trim(),context=selectedPoliticalContext();
   if(text.length<200){$('analysis-status').textContent='Supply at least 200 characters. Load article text or paste a longer excerpt.';return;}
@@ -178,7 +183,7 @@ $('analysis-run').addEventListener('click',async()=>{
   showProgress();const ticker=setInterval(showProgress,1000);
   try{const data=await streamAnalysis({model:state.aiModel,title:state.analysisItem.title,text,kind:$('analysis-kind').value,context,mode},event=>{progress=event;showProgress();});clearInterval(ticker);renderAnalysis(data);$('analysis-status').textContent=data.cached?'Loaded saved analysis.':`Analysis ready in ${data.seconds}s. Matching requests reuse saved results for up to 30 days.`;}
 
-  catch(error){$('analysis-status').textContent=error.message;}finally{clearInterval(ticker);state.analysisBusy=false;controls.forEach(el=>el.disabled=false);$('analysis-rss').disabled=!(state.analysisItem.summary||'').trim();}
+  catch(error){$('analysis-status').textContent=error.message;}finally{clearInterval(ticker);state.analysisBusy=false;controls.forEach(el=>el.disabled=false);$('analysis-extract').disabled=!!state.extracting;$('analysis-rss').disabled=!(state.analysisItem.summary||'').trim();}
 });
 
 const workspace=readStore('news-osint.workspace',{});

@@ -227,8 +227,11 @@ The backend talks directly to `http://127.0.0.1:11434`; cloud models are exclude
 The integration follows Ollama's [chat API](https://docs.ollama.com/api/chat) and
 [structured output schema](https://docs.ollama.com/capabilities/structured-outputs).
 
-Use **Analyze** on a news or saved story. The panel starts with the RSS headline and excerpt when available. If the feed
-contains no excerpt, the panel explains this and disables the RSS button.
+Use **Analyze** on a news or saved story. The panel defaults to **Extracted page text** and automatically attempts to load
+the article when opened. It stays editable during loading; late responses do not
+overwrite pasted text or a newly selected story. If extraction fails, use
+**Use RSS excerpt** explicitly or paste text. RSS uses the headline and excerpt
+when available; the RSS button is disabled if the feed supplies no excerpt.
 **Load article text** attempts public-page extraction; review the editable text,
 or paste article text yourself using Ctrl+V or **Paste from clipboard**. Clipboard
 access may require the browser’s permission; Ctrl+V remains available if access
@@ -280,6 +283,33 @@ controls or source-text editor. Changing the text or context hides the PDF butto
 until a new analysis is ready. Canceling printing returns to the analysis.
 
 Coverage comparison is not part of this initial version.
+
+## Optional desktop Ollama orb (Omarchy)
+
+`python3 install_orb.py` installs and enables the user-owned Omarchy plugin
+`local.news-osint.ollama-orb` by linking `desktop/ollama-orb` into
+`~/.config/omarchy/plugins/`. The installer backs up `shell.json` before enabling
+it through the normal Omarchy plugin command. Omarchy with Quickshell is required;
+the news app itself still works without the desktop plugin.
+
+The transparent 400 × 400 overlay is anchored 16 pixels from the bottom-right
+screen edges. It follows the active Omarchy theme and does not take keyboard
+focus or intercept mouse clicks. It appears during **News-OSINT's** local Ollama
+inference and disappears afterward, including on errors. Cached analyses and
+models kept warm while idle do not activate it. Other apps' Ollama requests are
+not monitored. The animation is capped at 20 FPS and stops completely while hidden.
+
+The backend publishes only model, mode, stage, PID and a timestamp to
+`~/.local/state/news-osint/ollama-activity.json`, with a heartbeat during inference.
+No article text is included. If the backend crashes, the orb hides after eight
+seconds without a fresh heartbeat. `NEWS_OSINT_STATE` can override the state
+folder; the backend and shell must use the same value.
+
+Disable with `omarchy plugin disable local.news-osint.ollama-orb`; enable again
+with `omarchy plugin enable local.news-osint.ollama-orb`. The wireframe renderer
+is adapted from [macd2/OmarchyAgentOrb](https://github.com/macd2/OmarchyAgentOrb),
+pinned to commit `99ac3b2b793884e742b6db268d18dc6c8906eda4`, copyright 2026 macd2,
+under the MIT license included in `desktop/ollama-orb/LICENSE`.
 
 ## Development
 

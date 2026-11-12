@@ -602,7 +602,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.stream_analysis(data)
                 return
             actions = {
-                '/api/ai/analyze': lambda: local_ai.analyze(data, cached),
+                '/api/ai/analyze': lambda: local_ai.analyze(data, cached, activity_dir=STATE),
                 '/api/ai/extract': lambda: local_ai.extract(data.get('url')),
                 '/api/sources': lambda: save_sources(data.get('sources')),
                 '/api/sources/test': lambda: test_feed(data),
@@ -632,7 +632,7 @@ class Handler(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError):
                     connected = False
         try:
-            result = local_ai.analyze(data, cached, progress=emit)
+            result = local_ai.analyze(data, cached, progress=emit, activity_dir=STATE)
             emit({'type': 'result', 'data': result})
         except (ValueError, OSError) as exc:
             emit({'type': 'error', 'error': str(exc)})
