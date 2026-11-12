@@ -33,6 +33,80 @@ function restoreFilters(value) { if (!value || typeof value !== 'object') return
 function dateLabel(timestamp) { if (!timestamp) return 'Date unavailable'; return new Date(timestamp * 1000).toLocaleString([], {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}); }
 function empty(title, message) { const box = make('div', undefined, 'empty'); box.append(make('span', '◎', 'empty-symbol'), make('h3', title), make('p', message)); return box; }
 
+// Analysis is explicit and local; article text never enters a cloud API.
+state.aiModel=readStore('news-osint.ai-model','qwen3:4b');
+state.aiModels=[];
+function renderAIModels(){
+  const select=$('ai-model');select.replaceChildren();
+  const names=state.aiModels.map(m=>m.name);if(state.aiModel&&!names.includes(state.aiModel))names.unshift(state.aiModel);
+  if(!names.length)select.append(new Option('Check connection to list models',''));
+  for(const name of names)select.append(new Option(name,name));select.value=state.aiModel;
+}
+async function checkAI(){
+  $('ai-check').disabled=true;$('ai-connection').textContent='Connecting to local Ollama…';
+  const draft=$('ai-model').value;
+  try{const data=await get('/api/ai/models');state.aiModels=data.models;renderAIModels();
+    if(state.aiModels.some(m=>m.name===draft))$('ai-model').value=draft;
+    else if(!state.aiModels.some(m=>m.name===state.aiModel))$('ai-model').value=state.aiModels[0]?.name||'';
+    $('ai-connection').textContent=`Connected to ${data.endpoint} · ${data.models.length} local model(s). Choose a model and Save changes.`;
+  }catch(error){$('ai-connection').textContent=error.message;}finally{$('ai-check').disabled=false;}
+}
+async function aiRequest(path,data){
+  const response=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-News-OSINT':'ai'},body:JSON.stringify(data)});
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Local AI request failed.');return result;
+}
+function invalidateAnalysis(){ $('analysis-results').replaceChildren();$('analysis-status').textContent=''; }
+function analysisTextChanged(){
+  $('analysis-count').textContent=`${$('analysis-text').value.length.toLocaleString()} / 20,000 characters · minimum 200`;
+}
+function useRSS(){
+  invalidateAnalysis();
+  const item=state.analysisItem;$('analysis-text').value=(item.summary||'').slice(0,20000);$('analysis-kind').value='rss';
+  $('analysis-source-note').textContent='RSS excerpt only. Load the article or paste text for a more complete assessment.';analysisTextChanged();
+}
+function openAnalysis(item){
+  if(state.analysisBusy){$('analysis-dialog').showModal();return;}
+  state.analysisItem=item;state.analysisToken=(state.analysisToken||0)+1;
+  hideSelectionTools();$('analysis-story-title').textContent=item.title;$('analysis-results').replaceChildren();$('analysis-status').textContent='';
+  $('analysis-model').textContent='Local model: '+(state.aiModel||'Select one in Local AI settings');
+  $('analysis-context').value=readStore('news-osint.ai-context','Country-specific; do not assume US politics');useRSS();$('analysis-dialog').showModal();
+}
+function renderAnalysis(data){
+  const out=$('analysis-results');out.replaceChildren();
+  out.append(make('p',`${data.model} · ${data.kind==='rss'?'RSS excerpt':data.kind==='extracted'?'Extracted page text':'Pasted / edited text'} · ${data.characters.toLocaleString()} characters · ${new Date(data.analyzedAt*1000).toLocaleString()} · generated in ${data.seconds}s`,'analysis-meta'));
+  function list(title,items){out.append(make('h3',title));const ul=make('ul');for(const text of items)ul.append(make('li',text));out.append(ul);}
+  list('Summary',data.summary);list('Claims made by the text — unverified',data.claims);
+  out.append(make('h3','Apparent leaning: '+data.leaning),make('p','Context: '+data.context),make('p',data.rationale));
+  out.append(make('h3','Supporting quotations'));
+  if(!data.evidence.length)out.append(make('p','No matching supporting quotations were returned.'));
+  for(const entry of data.evidence){const quote=make('blockquote');quote.append(make('q',entry.quote),make('p',entry.explanation));out.append(quote);}
+  list('Limitations',data.limitations);
+}
+$('ai-check').addEventListener('click',checkAI);
+$('analysis-close').addEventListener('click',()=>{$('analysis-dialog').close();});
+$('analysis-settings').addEventListener('click',()=>{$('analysis-dialog').close();openSettings();});
+$('analysis-rss').addEventListener('click',useRSS);
+$('analysis-kind').addEventListener('change',invalidateAnalysis);
+$('analysis-context').addEventListener('input',invalidateAnalysis);
+$('analysis-text').addEventListener('input',()=>{invalidateAnalysis();$('analysis-kind').value='pasted';$('analysis-source-note').textContent='Edited or pasted text; check that it includes the article material you want assessed.';analysisTextChanged();});
+$('analysis-extract').addEventListener('click',async()=>{
+  const token=state.analysisToken,originalText=$('analysis-text').value;const button=$('analysis-extract');button.disabled=true;$('analysis-source-note').textContent='Fetching article text…';
+  try{const data=await aiRequest('/api/ai/extract',{url:state.analysisItem.url});if(token!==state.analysisToken)return;
+    if($('analysis-text').value!==originalText){$('analysis-source-note').textContent='Text changed while loading; your edits were kept. Load again to replace them.';return;}
+    invalidateAnalysis();$('analysis-text').value=data.text;$('analysis-kind').value='extracted';$('analysis-source-note').textContent=data.notice+(data.truncated?' Truncated to 20,000 characters.':'');analysisTextChanged();
+  }catch(error){if(token===state.analysisToken)$('analysis-source-note').textContent=error.message;}finally{button.disabled=false;}
+});
+$('analysis-run').addEventListener('click',async()=>{
+  const text=$('analysis-text').value.trim(),context=$('analysis-context').value.trim();
+  if(text.length<200){$('analysis-status').textContent='Supply at least 200 characters. Load article text or paste a longer excerpt.';return;}
+  if(!context){$('analysis-status').textContent='Enter the political context for the assessment.';return;}
+  state.analysisBusy=true;$('analysis-results').replaceChildren();$('analysis-status').textContent='Analyzing locally… This can take a few minutes. Closing the panel lets it continue; reopen Analyze to see progress.';
+  const controls=[...document.querySelectorAll('.analysis-inputs button,.analysis-inputs input,.analysis-inputs textarea,.analysis-inputs select')];controls.forEach(el=>el.disabled=true);
+  writeStore('news-osint.ai-context',context);
+  try{const data=await aiRequest('/api/ai/analyze',{model:state.aiModel,title:state.analysisItem.title,text,kind:$('analysis-kind').value,context});renderAnalysis(data);$('analysis-status').textContent='Analysis ready. Matching requests reuse saved results for up to 30 days.';}
+  catch(error){$('analysis-status').textContent=error.message;}finally{state.analysisBusy=false;controls.forEach(el=>el.disabled=false);}
+});
+
 const workspace=readStore('news-osint.workspace',{});
 state.mapMode=mapMode(readStore('news-osint.map-style',null));
 const markerOptions=readStore('news-osint.marker-options',{});
@@ -127,6 +201,7 @@ async function openSettings() {
     $('map-style-choice').value=state.mapMode;
     $('marker-style-choice').value=state.markerStyle;
     $('marker-size-choice').value=state.markerSize;
+    renderAIModels();
     $('settings-status').textContent='';$('add-feed-form').reset();$('settings-dialog').showModal();
   } catch(error){toast(error.message);}
   finally{$('settings-open').disabled=false;}
@@ -144,6 +219,7 @@ async function saveSettings() {
     applyMapMode($('map-style-choice').value);
     state.markerStyle=$('marker-style-choice').value;state.markerSize=$('marker-size-choice').value;
     writeStore('news-osint.marker-options',{style:state.markerStyle,size:state.markerSize});updateMarkerAppearance();
+    state.aiModel=$('ai-model').value;writeStore('news-osint.ai-model',state.aiModel);
     $('settings-dialog').close();toast('Settings saved.');if(sourcesChanged)loadNews();
   } catch(error){$('settings-status').textContent=error.message;}
   finally{$('settings-save').disabled=false;}
@@ -212,7 +288,7 @@ function makeStory(item) {
   const meta=make('div',undefined,'story-meta');meta.append(make('span',item.source,'source-tag'));
   if(item.via)meta.append(make('span','via '+item.via));meta.append(make('span','·'),make('time',dateLabel(item.timestamp)));
   article.append(meta,make('h3',item.title,'research-text'));if(item.summary)article.append(make('p',item.summary,'research-text'));
-  const actions=make('div',undefined,'story-actions');actions.append(articleLink('Read article ↗',item.url));
+  const actions=make('div',undefined,'story-actions');actions.append(button('Analyze',()=>openAnalysis(item)));actions.append(articleLink('Read article ↗',item.url));
   const external=link('Open in browser ↗',item.url);external.className='external-story-link';actions.append(external);
   actions.append(button(state.bookmarks[item.id]?'Saved ✓':'Save',()=>{
     if(state.bookmarks[item.id])delete state.bookmarks[item.id];
@@ -228,7 +304,7 @@ function makeStory(item) {
 let selectingText=false, researchSelection=null;
 function hideSelectionTools() { $('selection-tools').hidden=true;researchSelection=null; }
 function showSelectionTools() {
-  if(selectingText || $('settings-dialog').open || $('research-dialog').open)return;
+  if(selectingText || $('settings-dialog').open || $('research-dialog').open || $('analysis-dialog').open)return;
   const selection=window.getSelection();
   if(!selection || selection.isCollapsed || selection.rangeCount!==1){hideSelectionTools();return;}
   const text=selection.toString().replace(/\s+/g,' ').trim();

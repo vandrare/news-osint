@@ -218,6 +218,39 @@ profile do not run in this separate app profile.
 The MapLibre bundle and its license are stored in `static/vendor/` so the app
 does not fetch executable JavaScript from a CDN at startup.
 
+## Local AI analysis
+
+Ollama is optional. News-OSINT works normally without it. In **Settings → Local AI**,
+use **Check connection / refresh models**, select an installed local model, and
+save. The default is `qwen3:4b` when installed. No model is downloaded automatically.
+The backend talks directly to `http://127.0.0.1:11434`; cloud models are excluded.
+The integration follows Ollama's [chat API](https://docs.ollama.com/api/chat) and
+[structured output schema](https://docs.ollama.com/capabilities/structured-outputs).
+
+Use **Analyze** on a news or saved story. The panel starts with the RSS excerpt.
+**Load article text** attempts public-page extraction; review the editable text,
+or paste article text yourself. Extraction does not bypass logins or paywalls and
+may include unrelated paragraphs or miss article content. Failed extraction keeps
+the existing text. Inputs require 200–20,000 characters; extraction beyond that
+limit is marked as truncated. Edited text is marked as pasted/edited.
+
+Specify the political context, then **Analyze text**. Results contain a summary,
+claims made by the text, apparent leaning and rationale, supporting quotations,
+and limitations. Quotations must match supplied text (ignoring whitespace), or
+they are removed. RSS excerpts cannot receive a definitive leaning label, and
+other political labels require at least one matching quotation. This verifies
+quotation presence, not the model's interpretation. It is experimental framing
+analysis, not a fact check, publisher rating, or calibrated confidence score.
+
+Analysis runs only on demand, one generation at a time, with a four-minute request
+timeout. Closing the panel lets the request finish; click Analyze to reopen it.
+Exact results are cached locally for 30 days, keyed by source text, title, political
+context, model digest, source type, and analysis version. Article downloads still
+contact the publisher; inference is sent only to the local Ollama service.
+Cached analysis contains generated summaries and quoted passages in the app's
+existing cache directory. Model selection and political context are saved in the
+local browser profile. Coverage comparison is not part of this initial version.
+
 ## Development
 
 `python3 server.py --port 47831` runs the server. No pip or npm install is needed

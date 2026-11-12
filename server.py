@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """News-OSINT: loopback-only, standard-library backend. No subscriptions."""
 import argparse
+import local_ai
 import concurrent.futures
 import datetime
 import email.utils
@@ -581,27 +582,35 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         host = self.headers.get('Host', '')
         settings = self.path in ('/api/sources', '/api/sources/test')
+        ai = self.path in ('/api/ai/analyze', '/api/ai/extract')
         if (host.split(':')[0] not in ('127.0.0.1', 'localhost')
                 or self.headers.get('Origin') != 'http://' + host
-                or self.headers.get('X-News-OSINT') != ('settings' if settings else 'reader')):
+                or self.headers.get('X-News-OSINT') != ('ai' if ai else 'settings' if settings else 'reader')):
             self.send_error(403)
             return
-        if self.path not in ('/api/reader', '/api/sources', '/api/sources/test'):
+        if self.path not in ('/api/reader', '/api/sources', '/api/sources/test', '/api/ai/analyze', '/api/ai/extract'):
             self.send_error(404)
             return
         try:
             length = int(self.headers.get('Content-Length', '0'))
-            if not 0 < length <= (500000 if settings else 16000):
+            if not 0 < length <= (500000 if settings or ai else 16000):
                 raise ValueError('Invalid request size')
             data = json.loads(self.rfile.read(length))
             if not isinstance(data, dict):
                 raise ValueError('Invalid request')
-            result = save_sources(data.get('sources')) if self.path == '/api/sources' else test_feed(data) if settings else open_reader(data.get('url'))
+            actions = {
+                '/api/ai/analyze': lambda: local_ai.analyze(data, cached),
+                '/api/ai/extract': lambda: local_ai.extract(data.get('url')),
+                '/api/sources': lambda: save_sources(data.get('sources')),
+                '/api/sources/test': lambda: test_feed(data),
+                '/api/reader': lambda: open_reader(data.get('url')),
+            }
+            result = actions[self.path]()
             self.respond(json.dumps(result).encode(), 'application/json')
         except ValueError as exc:
             self.respond(json.dumps({'error': str(exc)}).encode(), 'application/json', 400)
         except OSError:
-            message = 'Feed could not be fetched. Check the URL and connection.' if self.path == '/api/sources/test' else 'Feed settings could not be saved.' if settings else 'The article reader could not start. Use Open in browser instead.'
+            message = 'Local AI request failed. Check Ollama and try again.' if ai else 'Feed could not be fetched. Check the URL and connection.' if self.path == '/api/sources/test' else 'Feed settings could not be saved.' if settings else 'The article reader could not start. Use Open in browser instead.'
             self.respond(json.dumps({'error': message}).encode(), 'application/json', 503)
 
     def do_GET(self):
@@ -612,6 +621,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         try:
             routes = {'/api/health': lambda: {'app': 'news-osint', 'version': VERSION},
+                      '/api/ai/models': local_ai.models,
                       '/api/theme': theme, '/api/news': lambda: news(params),
                       '/api/sources': lambda: {'sources': sources()},
                       '/api/places': lambda: places(params.get('q', '')),
