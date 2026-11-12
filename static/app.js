@@ -113,7 +113,7 @@ $('analysis-extract').addEventListener('click',async()=>{
   const token=state.analysisToken,originalText=$('analysis-text').value;const button=$('analysis-extract');button.disabled=true;$('analysis-source-note').textContent='Fetching article text…';
   try{const data=await aiRequest('/api/ai/extract',{url:$('analysis-url').value.trim()});if(token!==state.analysisToken)return;
     if($('analysis-text').value!==originalText){$('analysis-source-note').textContent='Text changed while loading; your edits were kept. Load again to replace them.';return;}
-    invalidateAnalysis();$('analysis-text').value=data.text;$('analysis-kind').value='extracted';$('analysis-source-note').textContent=data.notice+(data.truncated?' Truncated to 20,000 characters.':'');analysisTextChanged();
+    invalidateAnalysis();if(data.url){$('analysis-url').value=data.url;updateAnalysisSourceLink();}$('analysis-text').value=data.text;$('analysis-kind').value='extracted';$('analysis-source-note').textContent=data.notice+(data.truncated?' Truncated to 20,000 characters.':'');analysisTextChanged();
   }catch(error){if(token===state.analysisToken)$('analysis-source-note').textContent=error.message;}finally{button.disabled=false;}
 });
 $('analysis-run').addEventListener('click',async()=>{

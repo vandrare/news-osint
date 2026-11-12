@@ -53,6 +53,7 @@ class LocalAITests(unittest.TestCase):
         response = MagicMock()
         response.__enter__.return_value = response
         response.headers.get_content_type.return_value = 'text/html'
+        response.headers.get_content_charset.return_value = 'utf-8'
         response.read.return_value = b'<html><p>Google News</p></html>'
         response.geturl.return_value = 'https://news.google.com/rss/articles/example'
         opener = MagicMock()
@@ -60,6 +61,23 @@ class LocalAITests(unittest.TestCase):
         with patch.object(local_ai, 'public_url'), patch.object(local_ai.urllib.request, 'build_opener', return_value=opener):
             with self.assertRaisesRegex(ValueError, 'publisher.*URL'):
                 local_ai.extract('https://news.google.com/rss/articles/example')
+
+    def test_google_link_resolution_and_invalid_destination(self):
+        page = '<div data-n-a-sg="signature" data-n-a-ts="123"></div>'
+        response = MagicMock()
+        response.__enter__.return_value = response
+        rpc = json.dumps([['wrb.fr', 'Fbv4je', json.dumps(['garturlres', 'https://publisher.example/article'])]])
+        response.read.return_value = (")]}'\n\n123\n" + rpc + '\n').encode()
+        opener = MagicMock()
+        opener.open.return_value = response
+        with patch.object(local_ai, 'public_url', side_effect=lambda url: url):
+            self.assertEqual(local_ai.decode_google_article('https://news.google.com/rss/articles/example', page, opener), 'https://publisher.example/article')
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.full_url, 'https://news.google.com/_/DotsSplashUi/data/batchexecute')
+        self.assertIn('Fbv4je', request.data.decode())
+        with patch.object(local_ai, 'public_url', side_effect=ValueError('Private address')):
+            with self.assertRaises(ValueError):
+                local_ai.decode_google_article('https://news.google.com/rss/articles/example', page, opener)
 
     def test_extraction_blocks_private_targets(self):
         for url in ['http://127.0.0.1', 'http://[::1]', 'file:///tmp/news', 'http://localhost:11434']:

@@ -101,6 +101,63 @@ class ArticleParser(HTMLParser):
         return '\n\n'.join(dict.fromkeys(paragraphs))
 
 
+class GoogleArticleParams(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.signature = None
+        self.timestamp = None
+
+    def handle_starttag(self, tag, attrs):
+        values = dict(attrs)
+        if values.get('data-n-a-sg') and values.get('data-n-a-ts'):
+            self.signature = values['data-n-a-sg']
+            self.timestamp = values['data-n-a-ts']
+
+
+def decode_google_article(url, page, opener):
+    """Resolve the opaque RSS ID using the page's article-link metadata.
+
+    Google's undocumented Fbv4je RPC may change; publisher URL/paste remains
+    the fallback. Protocol reference: dbernheisel/google_news_decoder.
+    """
+    failure = 'Google News could not resolve the publisher link. Open source and paste the publisher’s URL into Article URL, or paste the article text.'
+    match = re.fullmatch(r'/(?:rss/)?(?:articles|read)/([A-Za-z0-9_-]+)', urllib.parse.urlsplit(url).path)
+    params = GoogleArticleParams()
+    params.feed(page)
+    if not match or not params.signature or not (params.timestamp or '').isdigit():
+        raise ValueError(failure)
+    language = ['X', 'X', ['X', 'X'], None, None, 1, 1, 'US:en', None, 1,
+                None, None, None, None, None, 0, 1]
+    context = [language, 'X', 'X', 1, [1, 1, 1], 1, 1, None, 0, 0, None, 0]
+    arguments = json.dumps(['garturlreq', context, match[1], int(params.timestamp), params.signature])
+    body = urllib.parse.urlencode({'f.req': json.dumps([[['Fbv4je', arguments, None, 'generic']]])}).encode()
+    request = urllib.request.Request('https://news.google.com/_/DotsSplashUi/data/batchexecute', data=body,
+        headers={'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'News-OSINT/0.1 (article text reader)'})
+    try:
+        with opener.open(request, timeout=15) as response:
+            raw = response.read(1_000_001)
+        if len(raw) > 1_000_000:
+            raise ValueError(failure)
+        for line in raw.decode('utf-8').splitlines():
+            if not line.startswith('['):
+                continue
+            try:
+                rows = json.loads(line)
+                for row in rows:
+                    if isinstance(row, list) and len(row) > 2 and row[1] == 'Fbv4je' and isinstance(row[2], str):
+                        result = json.loads(row[2])
+                        if isinstance(result, list) and len(result) > 1 and result[0] == 'garturlres':
+                            resolved = public_url(result[1])
+                            if urllib.parse.urlsplit(resolved).hostname == 'news.google.com':
+                                raise ValueError(failure)
+                            return resolved
+            except (ValueError, TypeError, IndexError):
+                continue
+    except (OSError, urllib.error.URLError) as exc:
+        raise ValueError(failure) from exc
+    raise ValueError(failure)
+
+
 def extract(url):
     public_url(url)
     class Redirect(urllib.request.HTTPRedirectHandler):
@@ -108,17 +165,23 @@ def extract(url):
             public_url(newurl)
             return super().redirect_request(req, fp, code, msg, headers, newurl)
     request = urllib.request.Request(url, headers={'User-Agent': 'News-OSINT/0.1 (article text reader)', 'Accept': 'text/html'})
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), Redirect)
     try:
-        with urllib.request.build_opener(urllib.request.ProxyHandler({}), Redirect).open(request, timeout=15) as response:
+        with opener.open(request, timeout=15) as response:
             if response.headers.get_content_type() not in ('text/html', 'application/xhtml+xml'):
                 raise ValueError('This page is not an HTML article. Paste the article text instead.')
             raw = response.read(3_000_001)
             if len(raw) > 3_000_000:
                 raise ValueError('This page is too large. Paste the article text instead.')
+            page = raw.decode(response.headers.get_content_charset() or 'utf-8', errors='replace')
             if urllib.parse.urlsplit(response.geturl()).hostname == 'news.google.com':
-                raise ValueError('This Google News link does not expose the publisher’s article text. Open source, copy the publisher’s URL into Article URL, and load again — or paste the article text.')
+                resolved = decode_google_article(url, page, opener)
+                result = extract(resolved)
+                result['url'] = resolved
+                result['notice'] = 'Resolved Google News to the publisher. ' + result['notice']
+                return result
             parser = ArticleParser()
-            parser.feed(raw.decode(response.headers.get_content_charset() or 'utf-8', errors='replace'))
+            parser.feed(page)
             text = parser.text()
     except (OSError, urllib.error.URLError, LookupError) as exc:
         raise ValueError('Article text could not be fetched. The page may require JavaScript, a login, or a subscription. Paste text or use the RSS excerpt.') from exc

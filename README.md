@@ -232,9 +232,11 @@ contains no excerpt, the panel explains this and disables the RSS button.
 **Load article text** attempts public-page extraction; review the editable text,
 or paste article text yourself using Ctrl+V or **Paste from clipboard**. Clipboard
 access may require the browser’s permission; Ctrl+V remains available if access
-is denied. For Google News wrapper links, use **Open source** and copy the
-publisher’s address into **Article URL**, then load again. Google News wrappers
-that do not redirect to an article cannot supply full text directly.
+is denied. Google News wrapper links are resolved to publisher URLs automatically when
+possible. This uses Google’s undocumented article-link RPC, which can change or
+be rate-limited ([protocol reference](https://github.com/dbernheisel/google_news_decoder)).
+If resolution fails, use **Open source** and copy the publisher’s address into
+**Article URL**, then load again, or paste the text.
 Extraction does not bypass logins or paywalls and
 may include unrelated paragraphs or miss article content. Failed extraction keeps
 the existing text. Inputs require 200–20,000 characters; extraction beyond that
