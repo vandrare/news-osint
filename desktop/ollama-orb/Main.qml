@@ -85,7 +85,7 @@ PanelWindow {
       anchors.fill: parent
       anchors.bottomMargin: 20
       antialiasing: true
-      readonly property real playbackSpeed: 0.35
+      readonly property real playbackSpeed: 0.50
       onPaint: {
         if (!panel.visible || width < 1 || height < 1) return
         Composing.paint(getContext("2d"), width, height, panel.clock, playbackSpeed,

@@ -40,6 +40,7 @@ const politicalContexts={
   auto:'Country-specific; do not assume US politics',
   us:'Assume US politics; assess framing within the US political spectrum.',
   'local-us':'Local US politics (state, county, city and school boards); assess local policy framing, not assumed national party affiliation.',
+  israel:'Israeli politics; assess framing within the Israeli political spectrum rather than mapping it to US party alignments.',
   uk:'UK politics; assess framing within the UK political spectrum.',
   eu:'European / EU politics; distinguish EU policy disputes from member-state political alignments.',
   international:'International / geopolitics; assess regional interests and framing without imposing a single national left/right spectrum.',

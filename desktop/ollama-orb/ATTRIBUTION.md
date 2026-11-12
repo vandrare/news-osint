@@ -10,7 +10,7 @@ notice are included in LICENSE.thinking-orbs and NOTICE.thinking-orbs.
 
 The desktop version preserves the demo's classic 128px Composing tuning:
 98 ghost dots, 16 lanes × 71 segments, frozen orientation and traveling waves.
-The demo's speed multiplier is set to **0.35**, including its 2.1 base preset
+The demo's speed multiplier is set to **0.50**, including its 2.1 base preset
 speed. The geometry is scaled into the desktop panel; grayscale is replaced by
 reactive Omarchy accent, foreground and muted colors. Pointer distortion is
 omitted because the desktop overlay is click-through.

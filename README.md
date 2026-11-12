@@ -247,7 +247,7 @@ limit is marked as truncated. Edited text is marked as pasted/edited.
 
 Choose a political context from the dropdown: country-specific (default),
 **Assume US politics**, **Local US politics** (state, county, city, school board),
-UK, European/EU, international/geopolitics, nonpolitical, or **Custom context**.
+Israeli, UK, European/EU, international/geopolitics, nonpolitical, or **Custom context**.
 Local US analysis focuses on local policy framing rather than assuming national
 party affiliation. Custom context supports other countries and regional contexts;
 existing saved context text is retained. The last context used for analysis is
@@ -294,7 +294,7 @@ the news app itself still works without the desktop plugin.
 
 The transparent 300 × 300 overlay is anchored 100 pixels from the bottom-right
 screen edges. It uses the classic **Composing** dotted-ribbon animation from
-[Thinking Orbs](https://schoolees.github.io/thinking-orbs/) at **0.35× speed**,
+[Thinking Orbs](https://schoolees.github.io/thinking-orbs/) at **0.50× speed**,
 scaled into the 300px panel. Its dot colors follow the active Omarchy accent,
 foreground, and muted palette. It does not take keyboard focus or intercept
 mouse clicks. It appears during **News-OSINT's** local Ollama
