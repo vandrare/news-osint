@@ -292,10 +292,11 @@ Coverage comparison is not part of this initial version.
 it through the normal Omarchy plugin command. Omarchy with Quickshell is required;
 the news app itself still works without the desktop plugin.
 
-The transparent 400 × 400 overlay is anchored 16 pixels from the bottom-right
+The transparent 300 × 300 overlay is anchored 16 pixels from the bottom-right
 screen edges. It follows the active Omarchy theme and does not take keyboard
 focus or intercept mouse clicks. It appears during **News-OSINT's** local Ollama
-inference and disappears afterward, including on errors. Cached analyses and
+inference and fades out afterward, including on errors. Fade-in and fade-out
+each take 450 milliseconds. Cached analyses and
 models kept warm while idle do not activate it. Other apps' Ollama requests are
 not monitored. The animation is capped at 20 FPS and stops completely while hidden.
 

@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "local.news-osint.ollama-orb",
   "name": "News-OSINT Ollama Orb",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Scott Fors; mesh by macd2",
   "license": "MIT",
-  "description": "Theme-aware 400px bottom-right orb visible during News-OSINT Ollama inference.",
+  "description": "Theme-aware 300px bottom-right orb visible during News-OSINT Ollama inference.",
   "kinds": [
     "panel"
   ],

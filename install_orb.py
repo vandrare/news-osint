@@ -57,7 +57,7 @@ def main():
             catalog = subprocess.check_output(['omarchy', 'plugin', 'list', '--json'], text=True)
             if not any(item.get('id') == 'local.news-osint.ollama-orb' and item.get('enabled') for item in json.loads(catalog)):
                 raise SystemExit(result.stderr or 'The orb could not be enabled.')
-    print('Ollama orb installed: 400 × 400, bottom-right; hidden until News-OSINT runs inference.')
+    print('Ollama orb installed: 300 × 300, bottom-right; hidden until News-OSINT runs inference.')
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 // Adapted from macd2/OmarchyAgentOrb, commit 99ac3b2b793884e742b6db268d18dc6c8906eda4.
 // Copyright (c) 2026 macd2. MIT license; see LICENSE.
-// News-OSINT integration: active inference only, 400px bottom-right, no input grab.
+// News-OSINT integration: active inference only, 300px bottom-right, no input grab.
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -10,13 +10,18 @@ import qs.Commons
 PanelWindow {
   id: panel
   property bool opened: true
-  visible: opened && freshActivity
+  readonly property bool wantsVisible: opened && freshActivity
+  property real fadeLevel: wantsVisible ? 1 : 0
+  visible: wantsVisible || fadeLevel > 0
+  Behavior on fadeLevel {
+    NumberAnimation { duration: 450; easing.type: Easing.InOutQuad }
+  }
   function open(payloadJson) { opened = true; return "ok" }
   function close() { opened = false; return "ok" }
   color: "transparent"
   surfaceFormat.opaque: false
-  implicitWidth: 400
-  implicitHeight: 400
+  implicitWidth: 300
+  implicitHeight: 300
   anchors { bottom: true; right: true }
   margins { bottom: 16; right: 16 }
   WlrLayershell.namespace: "news-osint-ollama-orb"
@@ -81,12 +86,13 @@ PanelWindow {
   // the mesh keeps its exact pixel size while the visible box is smaller.
   Item {
     anchors.fill: parent
+    opacity: panel.fadeLevel
     clip: true
 
     Canvas {
       id: canvas
-      width: 400
-      height: 400
+      width: 300
+      height: 300
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.verticalCenter: parent.verticalCenter
       antialiasing: true
