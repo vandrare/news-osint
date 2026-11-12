@@ -61,12 +61,21 @@ function analysisTextChanged(){
 }
 function useRSS(){
   invalidateAnalysis();
-  const item=state.analysisItem;$('analysis-text').value=(item.summary||'').slice(0,20000);$('analysis-kind').value='rss';
-  $('analysis-source-note').textContent='RSS excerpt only. Load the article or paste text for a more complete assessment.';analysisTextChanged();
+  const item=state.analysisItem,summary=(item.summary||'').trim();
+  $('analysis-rss').disabled=!summary;
+  $('analysis-text').value=summary?[item.title,summary].filter(Boolean).join('\n\n').slice(0,20000):'';
+  $('analysis-kind').value=summary?'rss':'pasted';
+  $('analysis-source-note').textContent=summary?'RSS headline and excerpt only. Load the article or paste text for a more complete assessment.':'This feed supplied no article excerpt. Load the publisher’s article or paste its text below. Google News feeds usually contain headlines and links only.';
+  analysisTextChanged();
+}
+function updateAnalysisSourceLink(){
+  const url=$('analysis-url').value.trim(),link=$('analysis-open-source');
+  try{const parsed=new URL(url);if(!['https:','http:'].includes(parsed.protocol))throw new Error();link.href=parsed.href;link.hidden=false;}catch{link.removeAttribute('href');link.hidden=true;}
 }
 function openAnalysis(item){
   if(state.analysisBusy){$('analysis-dialog').showModal();return;}
   state.analysisItem=item;state.analysisToken=(state.analysisToken||0)+1;
+  $('analysis-url').value=item.url;updateAnalysisSourceLink();
   hideSelectionTools();$('analysis-story-title').textContent=item.title;$('analysis-results').replaceChildren();$('analysis-status').textContent='';
   $('analysis-model').textContent='Local model: '+(state.aiModel||'Select one in Local AI settings');
   $('analysis-context').value=readStore('news-osint.ai-context','Country-specific; do not assume US politics');useRSS();$('analysis-dialog').showModal();
@@ -86,12 +95,23 @@ $('ai-check').addEventListener('click',checkAI);
 $('analysis-close').addEventListener('click',()=>{$('analysis-dialog').close();});
 $('analysis-settings').addEventListener('click',()=>{$('analysis-dialog').close();openSettings();});
 $('analysis-rss').addEventListener('click',useRSS);
+$('analysis-url').addEventListener('input',updateAnalysisSourceLink);
+$('analysis-paste').addEventListener('click',async()=>{
+  const token=state.analysisToken;
+  try{if(!navigator.clipboard?.readText)throw new Error('Clipboard access is unavailable. Click the text box and press Ctrl+V to paste.');
+    const text=await navigator.clipboard.readText();if(token!==state.analysisToken)return;
+    if(!text.trim())throw new Error('The clipboard contains no text. Copy the article text first, then paste here.');
+    $('analysis-text').value=text.slice(0,20000);$('analysis-text').dispatchEvent(new Event('input'));
+    if(text.length>20000)$('analysis-source-note').textContent='Pasted the first 20,000 characters; the remaining text was omitted.';
+  }catch(error){if(token===state.analysisToken)$('analysis-source-note').textContent=error.name==='NotAllowedError'?'Clipboard access was blocked. Click the text box and press Ctrl+V to paste.':error.message;}
+  $('analysis-text').focus();
+});
 $('analysis-kind').addEventListener('change',invalidateAnalysis);
 $('analysis-context').addEventListener('input',invalidateAnalysis);
 $('analysis-text').addEventListener('input',()=>{invalidateAnalysis();$('analysis-kind').value='pasted';$('analysis-source-note').textContent='Edited or pasted text; check that it includes the article material you want assessed.';analysisTextChanged();});
 $('analysis-extract').addEventListener('click',async()=>{
   const token=state.analysisToken,originalText=$('analysis-text').value;const button=$('analysis-extract');button.disabled=true;$('analysis-source-note').textContent='Fetching article text…';
-  try{const data=await aiRequest('/api/ai/extract',{url:state.analysisItem.url});if(token!==state.analysisToken)return;
+  try{const data=await aiRequest('/api/ai/extract',{url:$('analysis-url').value.trim()});if(token!==state.analysisToken)return;
     if($('analysis-text').value!==originalText){$('analysis-source-note').textContent='Text changed while loading; your edits were kept. Load again to replace them.';return;}
     invalidateAnalysis();$('analysis-text').value=data.text;$('analysis-kind').value='extracted';$('analysis-source-note').textContent=data.notice+(data.truncated?' Truncated to 20,000 characters.':'');analysisTextChanged();
   }catch(error){if(token===state.analysisToken)$('analysis-source-note').textContent=error.message;}finally{button.disabled=false;}
@@ -104,7 +124,7 @@ $('analysis-run').addEventListener('click',async()=>{
   const controls=[...document.querySelectorAll('.analysis-inputs button,.analysis-inputs input,.analysis-inputs textarea,.analysis-inputs select')];controls.forEach(el=>el.disabled=true);
   writeStore('news-osint.ai-context',context);
   try{const data=await aiRequest('/api/ai/analyze',{model:state.aiModel,title:state.analysisItem.title,text,kind:$('analysis-kind').value,context});renderAnalysis(data);$('analysis-status').textContent='Analysis ready. Matching requests reuse saved results for up to 30 days.';}
-  catch(error){$('analysis-status').textContent=error.message;}finally{state.analysisBusy=false;controls.forEach(el=>el.disabled=false);}
+  catch(error){$('analysis-status').textContent=error.message;}finally{state.analysisBusy=false;controls.forEach(el=>el.disabled=false);$('analysis-rss').disabled=!(state.analysisItem.summary||'').trim();}
 });
 
 const workspace=readStore('news-osint.workspace',{});

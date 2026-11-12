@@ -75,12 +75,13 @@
   </dialog>
 <dialog id="analysis-dialog" aria-labelledby="analysis-title"><div class="settings-heading"><div><span class="eyebrow">LOCAL AI · EXPERIMENTAL</span><h2 id="analysis-title">Analyze story</h2></div><button id="analysis-close" aria-label="Close analysis">×</button></div>
     <div class="analysis-scroll"><p id="analysis-story-title"></p><p class="muted">AI assessment of the supplied text, not a fact check or publisher rating. Review the source and supporting quotations.</p>
-    <div class="analysis-inputs"><div class="analysis-source-actions"><button id="analysis-extract">Load article text</button><button id="analysis-rss">Use RSS excerpt</button><button id="analysis-settings">Local AI settings</button></div><p id="analysis-source-note" class="muted"></p>
+    <p id="analysis-status" role="status"></p><div class="analysis-inputs"><div class="analysis-source-actions"><button id="analysis-extract">Load article text</button><button id="analysis-rss">Use RSS excerpt</button><button id="analysis-paste">Paste from clipboard</button><a id="analysis-open-source" target="_blank" rel="noopener noreferrer">Open source ↗</a><button id="analysis-settings">Local AI settings</button></div><p id="analysis-source-note" class="muted"></p>
+    <label for="analysis-url">Article URL — use the publisher’s address for Google News links</label><input id="analysis-url" type="url" maxlength="12000" placeholder="https://publisher.example/article">
     <label for="analysis-kind">Text source</label><select id="analysis-kind"><option value="rss">RSS excerpt — limited assessment</option><option value="extracted">Extracted page text — review for completeness</option><option value="pasted">Pasted / edited text</option></select>
     <label for="analysis-text">Text to analyze</label><textarea id="analysis-text" rows="8" maxlength="20000" placeholder="Load the article or paste its text here."></textarea><p id="analysis-count" class="muted"></p>
     <label for="analysis-context">Political context</label><input id="analysis-context" maxlength="160" value="Country-specific; do not assume US politics" placeholder="For example: US politics, UK politics, or French politics">
     <p id="analysis-model" class="muted"></p><button id="analysis-run" class="primary">Analyze text</button></div>
-    <p id="analysis-status" role="status"></p><div id="analysis-results" aria-live="polite"></div></div>
+    <div id="analysis-results" aria-live="polite"></div></div>
   </dialog>
 </body>
 </html>

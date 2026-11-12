@@ -115,6 +115,8 @@ def extract(url):
             raw = response.read(3_000_001)
             if len(raw) > 3_000_000:
                 raise ValueError('This page is too large. Paste the article text instead.')
+            if urllib.parse.urlsplit(response.geturl()).hostname == 'news.google.com':
+                raise ValueError('This Google News link does not expose the publisher’s article text. Open source, copy the publisher’s URL into Article URL, and load again — or paste the article text.')
             parser = ArticleParser()
             parser.feed(raw.decode(response.headers.get_content_charset() or 'utf-8', errors='replace'))
             text = parser.text()

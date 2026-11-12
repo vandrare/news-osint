@@ -2,7 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 import local_ai
 import server
@@ -48,6 +48,18 @@ class LocalAITests(unittest.TestCase):
         self.assertNotIn('Navigation', parser.text())
         self.assertNotIn('instructions', parser.text())
         self.assertIn('actual news', parser.text())
+
+    def test_google_wrapper_reports_publisher_url_needed(self):
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.headers.get_content_type.return_value = 'text/html'
+        response.read.return_value = b'<html><p>Google News</p></html>'
+        response.geturl.return_value = 'https://news.google.com/rss/articles/example'
+        opener = MagicMock()
+        opener.open.return_value = response
+        with patch.object(local_ai, 'public_url'), patch.object(local_ai.urllib.request, 'build_opener', return_value=opener):
+            with self.assertRaisesRegex(ValueError, 'publisher.*URL'):
+                local_ai.extract('https://news.google.com/rss/articles/example')
 
     def test_extraction_blocks_private_targets(self):
         for url in ['http://127.0.0.1', 'http://[::1]', 'file:///tmp/news', 'http://localhost:11434']:

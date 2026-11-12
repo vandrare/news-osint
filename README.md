@@ -227,9 +227,15 @@ The backend talks directly to `http://127.0.0.1:11434`; cloud models are exclude
 The integration follows Ollama's [chat API](https://docs.ollama.com/api/chat) and
 [structured output schema](https://docs.ollama.com/capabilities/structured-outputs).
 
-Use **Analyze** on a news or saved story. The panel starts with the RSS excerpt.
+Use **Analyze** on a news or saved story. The panel starts with the RSS headline and excerpt when available. If the feed
+contains no excerpt, the panel explains this and disables the RSS button.
 **Load article text** attempts public-page extraction; review the editable text,
-or paste article text yourself. Extraction does not bypass logins or paywalls and
+or paste article text yourself using Ctrl+V or **Paste from clipboard**. Clipboard
+access may require the browser’s permission; Ctrl+V remains available if access
+is denied. For Google News wrapper links, use **Open source** and copy the
+publisher’s address into **Article URL**, then load again. Google News wrappers
+that do not redirect to an article cannot supply full text directly.
+Extraction does not bypass logins or paywalls and
 may include unrelated paragraphs or miss article content. Failed extraction keeps
 the existing text. Inputs require 200–20,000 characters; extraction beyond that
 limit is marked as truncated. Edited text is marked as pasted/edited.
