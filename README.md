@@ -242,7 +242,13 @@ may include unrelated paragraphs or miss article content. Failed extraction keep
 the existing text. Inputs require 200–20,000 characters; extraction beyond that
 limit is marked as truncated. Edited text is marked as pasted/edited.
 
-Specify the political context, then **Analyze text**. Results contain a summary,
+Choose a political context from the dropdown: country-specific (default),
+**Assume US politics**, **Local US politics** (state, county, city, school board),
+UK, European/EU, international/geopolitics, nonpolitical, or **Custom context**.
+Local US analysis focuses on local policy framing rather than assuming national
+party affiliation. Custom context supports other countries and regional contexts;
+existing saved context text is retained. The last context used for analysis is
+remembered. Then use **Analyze text**. Results contain a summary,
 claims made by the text, apparent leaning and rationale, supporting quotations,
 and limitations. Quotations must match supplied text (ignoring whitespace), or
 they are removed. RSS excerpts cannot receive a definitive leaning label, and
@@ -257,7 +263,15 @@ context, model digest, source type, and analysis version. Article downloads stil
 contact the publisher; inference is sent only to the local Ollama service.
 Cached analysis contains generated summaries and quoted passages in the app's
 existing cache directory. Model selection and political context are saved in the
-local browser profile. Coverage comparison is not part of this initial version.
+local browser profile. Use **Save to PDF…** below a completed analysis to open Chromium's print dialog.
+Choose **Save as PDF**, then **Save** to choose the filename and folder. The report
+contains the title, publisher and source link, model, analysis time and text type,
+political context, summary, claims, rationale, quotations, and limitations.
+It prints on a white background across as many pages as needed, without the app
+controls or source-text editor. Changing the text or context hides the PDF button
+until a new analysis is ready. Canceling printing returns to the analysis.
+
+Coverage comparison is not part of this initial version.
 
 ## Development
 

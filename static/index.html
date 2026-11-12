@@ -79,9 +79,9 @@
     <label for="analysis-url">Article URL — use the publisher’s address for Google News links</label><input id="analysis-url" type="url" maxlength="12000" placeholder="https://publisher.example/article">
     <label for="analysis-kind">Text source</label><select id="analysis-kind"><option value="rss">RSS excerpt — limited assessment</option><option value="extracted">Extracted page text — review for completeness</option><option value="pasted">Pasted / edited text</option></select>
     <label for="analysis-text">Text to analyze</label><textarea id="analysis-text" rows="8" maxlength="20000" placeholder="Load the article or paste its text here."></textarea><p id="analysis-count" class="muted"></p>
-    <label for="analysis-context">Political context</label><input id="analysis-context" maxlength="160" value="Country-specific; do not assume US politics" placeholder="For example: US politics, UK politics, or French politics">
+    <label for="analysis-context">Political context</label><select id="analysis-context"><option value="auto">Country-specific — do not assume US politics</option><option value="us">Assume US politics</option><option value="local-us">Local US politics — state, county, city, school board</option><option value="uk">UK politics</option><option value="eu">European / EU politics</option><option value="international">International / geopolitics</option><option value="nonpolitical">Nonpolitical reporting</option><option value="custom">Custom context…</option></select><div id="analysis-custom-context" hidden><label for="analysis-context-custom">Describe the political context</label><input id="analysis-context-custom" maxlength="160" placeholder="For example: French local politics"></div>
     <p id="analysis-model" class="muted"></p><button id="analysis-run" class="primary">Analyze text</button></div>
-    <div id="analysis-results" aria-live="polite"></div></div>
+    <div id="analysis-results" aria-live="polite"></div><div id="analysis-export" hidden><button id="analysis-pdf">Save to PDF…</button><p class="muted">Choose “Save as PDF” in the print dialog, then Save to select a filename and folder.</p></div></div>
   </dialog>
 </body>
 </html>
