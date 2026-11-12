@@ -1,18 +1,19 @@
-# Earth land mask
+# Composing animation
 
-`land-mask.svg` was generated from Natural Earth 1:110m land polygons,
-projected into a 1024 × 512 equirectangular white-land / black-water mask.
+The classic Composing/ribbon animation is adapted from
+[Schoolees/thinking-orbs](https://github.com/Schoolees/thinking-orbs), pinned to
+commit `c5f4c356f21b3551423cf7dc828068cd7d239be3`, a framework-free adaptation
+of Jakub Antalik's thinking-orbs.
 
-- Data: https://www.naturalearthdata.com/downloads/110m-physical-vectors/110m-land/
-- Source: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_110m_land.geojson
-- Terms: https://www.naturalearthdata.com/about/terms-of-use/
-- License: public domain.
-- Downloaded: 2026-11-12.
-- Source SHA-256: `9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9`.
+Copyright (c) 2026 Jakub Antalik. MIT license. The full license and original
+notice are included in LICENSE.thinking-orbs and NOTICE.thinking-orbs.
 
-The shader extracts continent outlines from this mask and adds a rotating
-latitude/longitude wireframe. All line colors come from the active Omarchy theme.
-The globe does not represent live satellite imagery, cloud cover or weather.
+The desktop version preserves the demo's classic 128px Composing tuning:
+98 ghost dots, 16 lanes × 71 segments, frozen orientation and traveling waves.
+The demo's speed multiplier is set to **0.35**, including its 2.1 base preset
+speed. The geometry is scaled into the desktop panel; grayscale is replaced by
+reactive Omarchy accent, foreground and muted colors. Pointer distortion is
+omitted because the desktop overlay is click-through.
 
-The original orb lifecycle integration was adapted from macd2/OmarchyAgentOrb;
-its MIT license and copyright notice are retained in LICENSE and Main.qml.
+The activity lifecycle was originally adapted from macd2/OmarchyAgentOrb;
+its MIT license and copyright notice remain in LICENSE and Main.qml.

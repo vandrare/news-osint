@@ -1,5 +1,5 @@
 // Activity lifecycle adapted from macd2/OmarchyAgentOrb; see LICENSE.
-// Earth rendering and Natural Earth land mask added for News-OSINT.
+// Composing animation adapted from Schoolees/thinking-orbs; see ATTRIBUTION.md.
 // Copyright (c) 2026 macd2. MIT license; see LICENSE.
 // News-OSINT integration: active inference only, 300px bottom-right, no input grab.
 import QtQuick
@@ -7,6 +7,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import "Composing.js" as Composing
 
 PanelWindow {
   id: panel
@@ -71,6 +72,7 @@ PanelWindow {
       panel.lastTickMs = now
 
       panel.clock += dt
+      composing.requestPaint()
     }
   }
   Item {
@@ -78,22 +80,17 @@ PanelWindow {
     opacity: panel.fadeLevel
     clip: true
 
-    Image {
-      id: landMap
-      source: "land-mask.svg"
-      sourceSize: Qt.size(1024, 512)
-      smooth: true
-      visible: false
-    }
-    ShaderEffect {
+    Canvas {
+      id: composing
       anchors.fill: parent
-      property var landTexture: landMap
-      property color accentColor: Color.accent
-      property color foregroundColor: Color.foreground
-      property color mutedColor: Color.muted
-      // One full revolution per minute; continue smoothly between requests.
-      property real phase: panel.clock * 2 * Math.PI / 60 + 0.22
-      fragmentShader: "shaders/earth.frag.qsb"
+      anchors.bottomMargin: 20
+      antialiasing: true
+      readonly property real playbackSpeed: 0.35
+      onPaint: {
+        if (!panel.visible || width < 1 || height < 1) return
+        Composing.paint(getContext("2d"), width, height, panel.clock, playbackSpeed,
+                        Color.accent, Color.foreground, Color.muted)
+      }
     }
     Text {
       anchors.horizontalCenter: parent.horizontalCenter

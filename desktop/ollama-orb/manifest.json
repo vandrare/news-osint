@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "local.news-osint.ollama-orb",
   "name": "News-OSINT Ollama Orb",
-  "version": "1.2.0",
-  "author": "Scott Fors; mesh by macd2",
+  "version": "1.3.0",
+  "author": "Scott Fors; animation by Jakub Antalik / Schoolees",
   "license": "MIT",
-  "description": "Themed rotating 300px wireframe Earth, inset 100px from the bottom-right, visible during News-OSINT Ollama inference.",
+  "description": "Themed Composing thinking animation at 0.35x, 300px and inset 100px from the bottom-right, active during News-OSINT Ollama inference.",
   "kinds": [
     "panel"
   ],

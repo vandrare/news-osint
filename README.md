@@ -293,13 +293,14 @@ it through the normal Omarchy plugin command. Omarchy with Quickshell is require
 the news app itself still works without the desktop plugin.
 
 The transparent 300 × 300 overlay is anchored 100 pixels from the bottom-right
-screen edges. It displays a rotating wireframe Earth with continent outlines,
-a ten-degree latitude/longitude grid, and a faint rear hemisphere. Grid, coast,
-rim, and caption colors bind to the active Omarchy accent, foreground, and muted
-colors; the globe has no solid land/ocean fill or fixed blue/green palette. The globe makes one full revolution per minute
-while active. It does not take keyboard focus or intercept mouse clicks. It appears during **News-OSINT's** local Ollama
+screen edges. It uses the classic **Composing** dotted-ribbon animation from
+[Thinking Orbs](https://schoolees.github.io/thinking-orbs/) at **0.35× speed**,
+scaled into the 300px panel. Its dot colors follow the active Omarchy accent,
+foreground, and muted palette. It does not take keyboard focus or intercept
+mouse clicks. It appears during **News-OSINT's** local Ollama
 inference and fades out afterward, including on errors. Fade-in and fade-out
-each take 450 milliseconds. Cached analyses and models kept warm while idle do not activate it. Other apps' Ollama requests are
+each take 450 milliseconds. Cached analyses and models kept warm while idle do
+not activate it. Other apps' Ollama requests are
 not monitored. The animation is capped at 20 FPS and stops completely while hidden.
 
 The backend publishes only model, mode, stage, PID and a timestamp to
@@ -314,16 +315,9 @@ lifecycle was originally adapted from
 [macd2/OmarchyAgentOrb](https://github.com/macd2/OmarchyAgentOrb),
 pinned to commit `99ac3b2b793884e742b6db268d18dc6c8906eda4`, copyright 2026 macd2,
 under the MIT license included in `desktop/ollama-orb/LICENSE`.
-The Earth renderer uses bundled public-domain Natural Earth land outlines;
-see `desktop/ollama-orb/ATTRIBUTION.md`. No map imagery is downloaded at runtime.
-The globe is a geographic wireframe, not live satellite imagery or weather.
-
-The compiled Qt shader is included, so running the globe needs no build step.
-To rebuild it after editing the GLSL source, run:
-
-```sh
-/usr/lib/qt6/bin/qsb --qt6 -o desktop/ollama-orb/shaders/earth.frag.qsb desktop/ollama-orb/shaders/earth.frag
-```
+The Composing geometry is adapted from Schoolees/thinking-orbs under the MIT
+license; see `desktop/ollama-orb/ATTRIBUTION.md` and `LICENSE.thinking-orbs`.
+The animation runs locally using Canvas 2D, with no runtime downloads or web view.
 
 If a plugin rescan retains the cached QML, use `omarchy restart shell` to apply
 renderer changes.
